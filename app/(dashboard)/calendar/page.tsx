@@ -12,6 +12,12 @@ type TankAllocation = {
   phase?: string;
 };
 
+type Tank = {
+  _id: string;
+  name: string;
+  currentFish?: number;
+};
+
 type Batch = {
   _id: string;
   name: string;
@@ -22,11 +28,13 @@ type Batch = {
   harvestDate?: string | null;
 };
 
-type TankMovement = {
+type CalendarEvent = {
   _id: string;
   batchId: { _id: string; name?: string } | string;
-  date: string;
-  reason?: string;
+  kind: "sort" | "harvest";
+  milestoneWeek: number;
+  completedAt: string;
+  notes?: string;
 };
 
 type Milestone = {
@@ -34,18 +42,15 @@ type Milestone = {
   label: string;
   desc: string;
   kind: "sort" | "harvest";
-  requiredSortCount?: number;
 };
 
 const MILESTONES: Milestone[] = [
-  { week: 3, label: "Sort 1", desc: "Early check and split obvious shooters.", kind: "sort", requiredSortCount: 1 },
-  { week: 8, label: "Sort 2", desc: "Major grading across tanks (large / medium / small).", kind: "sort", requiredSortCount: 2 },
-  { week: 14, label: "Sort 3", desc: "Mid-cycle sort and consolidation.", kind: "sort", requiredSortCount: 3 },
-  { week: 17, label: "Sort 4", desc: "Pre-harvest selection of market-ready fish.", kind: "sort", requiredSortCount: 4 },
+  { week: 3, label: "Sort 1", desc: "Early check and split obvious shooters.", kind: "sort" },
+  { week: 8, label: "Sort 2", desc: "Major grading across tanks (large / medium / small).", kind: "sort" },
+  { week: 14, label: "Sort 3", desc: "Mid-cycle sort and consolidation.", kind: "sort" },
+  { week: 17, label: "Sort 4", desc: "Pre-harvest selection of market-ready fish.", kind: "sort" },
   { week: 18, label: "Harvest", desc: "Target harvest window.", kind: "harvest" },
 ];
-
-const SORT_REASONS = new Set(["sorting", "grading", "split", "quarantine", "other"]);
 
 function startOfDay(d: Date) {
   const x = new Date(d);
@@ -57,11 +62,17 @@ function dayDiff(from: Date, to: Date) {
   return Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+function eventKey(batchId: string, kind: "sort" | "harvest", week: number) {
+  return `${batchId}:${kind}:${week}`;
+}
+
 export default function CalendarPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
-  const [movements, setMovements] = useState<TankMovement[]>([]);
+  const [tanks, setTanks] = useState<Tank[]>([]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [eventBusyKey, setEventBusyKey] = useState("");
 
   useEffect(() => {
     void loadData();
@@ -71,18 +82,22 @@ export default function CalendarPage() {
     setLoading(true);
     setError("");
     try {
-      const [batchesRes, movesRes] = await Promise.all([
+      const [batchesRes, tanksRes, eventsRes] = await Promise.all([
         fetch("/api/batches"),
-        fetch("/api/tanks/movements?limit=500"),
+        fetch("/api/tanks"),
+        fetch("/api/calendar/events"),
       ]);
       const batchesPayload = await batchesRes.json();
-      const movesPayload = await movesRes.json();
+      const tanksPayload = await tanksRes.json();
+      const eventsPayload = await eventsRes.json();
 
       if (!batchesRes.ok) throw new Error(batchesPayload?.error || "Failed to load batches");
-      if (!movesRes.ok) throw new Error(movesPayload?.error || "Failed to load tank movements");
+      if (!tanksRes.ok) throw new Error(tanksPayload?.error || "Failed to load tanks");
+      if (!eventsRes.ok) throw new Error(eventsPayload?.error || "Failed to load calendar events");
 
       setBatches(batchesPayload || []);
-      setMovements(movesPayload || []);
+      setTanks(tanksPayload || []);
+      setEvents(eventsPayload || []);
     } catch (err: any) {
       setError(err?.message || "Failed to load calendar data");
     } finally {
@@ -90,19 +105,80 @@ export default function CalendarPage() {
     }
   }
 
-  const movementByBatch = useMemo(() => {
-    const map: Record<string, TankMovement[]> = {};
-    for (const m of movements) {
-      const batchId = typeof m.batchId === "string" ? m.batchId : m.batchId?._id || "";
-      if (!batchId) continue;
-      if (!map[batchId]) map[batchId] = [];
-      map[batchId].push(m);
+  async function markMilestoneDone(batchId: string, week: number) {
+    const key = eventKey(batchId, "sort", week);
+    setEventBusyKey(key);
+    setError("");
+    try {
+      const res = await fetch("/api/calendar/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ batchId, kind: "sort", milestoneWeek: week, completedAt: new Date().toISOString() }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || "Failed to mark milestone complete");
+      setEvents((prev) => {
+        const normalizedBatchId = typeof payload.batchId === "string" ? payload.batchId : payload.batchId?._id || "";
+        return [
+          ...prev.filter((e) => {
+            const eBatchId = typeof e.batchId === "string" ? e.batchId : e.batchId?._id || "";
+            return !(eBatchId === normalizedBatchId && e.kind === payload.kind && e.milestoneWeek === payload.milestoneWeek);
+          }),
+          payload,
+        ];
+      });
+    } catch (err: any) {
+      setError(err?.message || "Failed to mark milestone complete");
+    } finally {
+      setEventBusyKey("");
     }
-    for (const k of Object.keys(map)) {
-      map[k].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }
+
+  async function undoMilestone(eventId: string, batchId: string, week: number) {
+    const key = eventKey(batchId, "sort", week);
+    setEventBusyKey(key);
+    setError("");
+    try {
+      const res = await fetch(`/api/calendar/events/${eventId}`, { method: "DELETE" });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || "Failed to undo milestone");
+      setEvents((prev) => prev.filter((e) => e._id !== eventId));
+    } catch (err: any) {
+      setError(err?.message || "Failed to undo milestone");
+    } finally {
+      setEventBusyKey("");
+    }
+  }
+
+  const eventsByKey = useMemo(() => {
+    const map: Record<string, CalendarEvent> = {};
+    for (const e of events) {
+      const bId = typeof e.batchId === "string" ? e.batchId : e.batchId?._id || "";
+      if (!bId) continue;
+      map[eventKey(bId, e.kind, Number(e.milestoneWeek))] = e;
     }
     return map;
-  }, [movements]);
+  }, [events]);
+
+  const tankById = useMemo(() => {
+    const map: Record<string, Tank> = {};
+    for (const tank of tanks) map[tank._id] = tank;
+    return map;
+  }, [tanks]);
+
+  const tankByName = useMemo(() => {
+    const map: Record<string, Tank> = {};
+    for (const tank of tanks) {
+      const key = (tank.name || "").trim().toLowerCase();
+      if (key) map[key] = tank;
+    }
+    return map;
+  }, [tanks]);
+
+  const activeBatchCount = useMemo(
+    () => batches.filter((b) => b.status === "active" || b.status === "partial").length,
+    [batches]
+  );
 
   if (loading) {
     return (
@@ -116,7 +192,7 @@ export default function CalendarPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-semibold text-pond-100">Production Calendar</h1>
-        <p className="text-pond-200/75 text-sm mt-1">Timeline, sorting checkpoints and harvest readiness from live farm records</p>
+        <p className="text-pond-200/75 text-sm mt-1">Timeline, confirmed sorting checkpoints and harvest readiness</p>
       </div>
 
       {error && (
@@ -135,17 +211,33 @@ export default function CalendarPage() {
       ) : (
         batches.map((batch) => {
           const stockDate = new Date(batch.stockingDate);
-          const rawWeeks = weeksSince(stockDate);
-          const weeks = Math.max(0, rawWeeks);
+          const weeks = Math.max(0, weeksSince(stockDate));
           const { phase } = getBatchPhase(weeks);
           const progress = Math.max(0, Math.min((weeks / 18) * 100, 100));
 
-          const batchMoves = movementByBatch[batch._id] || [];
-          const completedSortMoves = batchMoves.filter((m) => SORT_REASONS.has((m.reason || "sorting").toLowerCase()));
-
           const activeAllocations = (batch.tankAllocations || [])
+            .map((a) => {
+              const fromId = a.tankId ? tankById[a.tankId] : undefined;
+              const fromName = a.tankName ? tankByName[a.tankName.trim().toLowerCase()] : undefined;
+              const matchedTank = fromId || fromName;
+              const liveFish = matchedTank ? Number(matchedTank.currentFish || 0) : Number(a.fishCount || 0);
+              return {
+                ...a,
+                tankName: matchedTank?.name || a.tankName,
+                fishCount: liveFish,
+              };
+            })
             .filter((a) => Number(a.fishCount || 0) > 0)
             .sort((a, b) => Number(b.fishCount || 0) - Number(a.fishCount || 0));
+
+          const fallbackLiveAllocations =
+            activeAllocations.length === 0 && activeBatchCount === 1
+              ? tanks
+                  .filter((t) => Number(t.currentFish || 0) > 0)
+                  .map((t) => ({ tankId: t._id, tankName: t.name, fishCount: Number(t.currentFish || 0), phase: "inferred-live" }))
+              : [];
+
+          const displayAllocations = activeAllocations.length > 0 ? activeAllocations : fallbackLiveAllocations;
 
           return (
             <div key={batch._id} className="glass-card p-5 space-y-5">
@@ -172,11 +264,22 @@ export default function CalendarPage() {
                     const dueDate = startOfDay(milestoneDate);
                     const d = dayDiff(today, dueDate);
 
-                    const sortDone = milestone.kind === "sort" && (completedSortMoves.length >= Number(milestone.requiredSortCount || 0));
-                    const harvestDone = milestone.kind === "harvest" && batch.status === "harvested";
-                    const isDone = sortDone || harvestDone;
+                    const key = eventKey(batch._id, milestone.kind, milestone.week);
+                    const confirmation = eventsByKey[key];
+                    const doneByEvent = milestone.kind === "sort" && Boolean(confirmation);
+                    const doneByHarvestStatus = milestone.kind === "harvest" && batch.status === "harvested";
+                    const isDone = doneByEvent || doneByHarvestStatus;
+
+                    const completionDate = doneByEvent
+                      ? startOfDay(new Date(confirmation.completedAt))
+                      : doneByHarvestStatus && batch.harvestDate
+                        ? startOfDay(new Date(batch.harvestDate))
+                        : undefined;
+
+                    const isEarly = Boolean(completionDate && completionDate.getTime() < dueDate.getTime() - 3 * 24 * 60 * 60 * 1000);
                     const isOverdue = !isDone && d < -3;
                     const isDueNow = !isDone && d >= -3 && d <= 3;
+                    const canConfirmSort = milestone.kind === "sort" && (batch.status === "active" || batch.status === "partial");
 
                     return (
                       <div
@@ -196,17 +299,49 @@ export default function CalendarPage() {
                           <div className="flex items-center gap-2 flex-wrap mb-1">
                             <span className="font-medium text-sm text-pond-100">{milestone.label}</span>
                             <span className="badge badge-water text-xs">Week {milestone.week}</span>
-                            {isDone && <span className="badge badge-green text-xs">Done</span>}
+                            {isDone && !isEarly && <span className="badge badge-green text-xs">Done</span>}
+                            {isDone && isEarly && <span className="badge badge-amber text-xs">Early</span>}
                             {isDueNow && <span className="badge badge-amber text-xs">Due now</span>}
                             {isOverdue && <span className="badge badge-red text-xs">Overdue</span>}
                             {!isDone && !isDueNow && !isOverdue && <span className="badge badge-water text-xs">Upcoming</span>}
                           </div>
+
                           <p className="text-xs text-pond-200/75 leading-relaxed">{milestone.desc}</p>
                           <p className="text-xs text-pond-200/60 mt-1 font-mono">
                             {format(milestoneDate, "d MMM yyyy")}
                             {" · "}
                             {d < 0 ? `${Math.abs(d)}d ago` : d === 0 ? "today" : `in ${d}d`}
                           </p>
+
+                          {completionDate && (
+                            <p className="text-[11px] text-pond-200/65 mt-1">
+                              Completed on {format(completionDate, "d MMM yyyy")}
+                            </p>
+                          )}
+
+                          {canConfirmSort && (
+                            <div className="pt-2 flex items-center gap-2">
+                              {!doneByEvent ? (
+                                <button
+                                  type="button"
+                                  className="btn-secondary !px-2.5 !py-1 text-xs"
+                                  disabled={eventBusyKey === key}
+                                  onClick={() => markMilestoneDone(batch._id, milestone.week)}
+                                >
+                                  {eventBusyKey === key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Mark Done"}
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="btn-secondary !px-2.5 !py-1 text-xs text-danger"
+                                  disabled={eventBusyKey === key}
+                                  onClick={() => undoMilestone(confirmation._id, batch._id, milestone.week)}
+                                >
+                                  {eventBusyKey === key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Undo"}
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -216,16 +351,21 @@ export default function CalendarPage() {
 
               <div className="rounded-xl p-4 space-y-3" style={{ background: "rgba(6,75,113,0.15)", border: "1px solid rgba(0,134,204,0.15)" }}>
                 <p className="text-xs font-medium text-water-300">Tank Allocation (Live)</p>
-                {activeAllocations.length === 0 ? (
-                  <p className="text-xs text-pond-200/70">No tank allocations recorded yet. Use Tanks → Move Fish to build live allocation history.</p>
+                {displayAllocations.length === 0 ? (
+                  <p className="text-xs text-pond-200/70">No tank allocations recorded yet. Use Tanks → Move Fish to build batch-linked allocation history.</p>
                 ) : (
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    {activeAllocations.map((a, idx) => (
-                      <div key={`${a.tankId || a.tankName || "tank"}-${idx}`} className="rounded-lg px-3 py-2" style={{ background: "rgba(12, 12, 14,0.5)" }}>
-                        <p className="text-pond-200/65">{a.tankName || "Unnamed tank"}</p>
-                        <p className="text-pond-200 font-medium mt-0.5">{Number(a.fishCount || 0).toLocaleString()} fish</p>
-                      </div>
-                    ))}
+                  <div className="space-y-2">
+                    {activeAllocations.length === 0 && fallbackLiveAllocations.length > 0 && (
+                      <p className="text-[11px] text-pond-200/65">Showing inferred live tank counts. Add a fish movement to start explicit batch-linked allocation.</p>
+                    )}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      {displayAllocations.map((a, idx) => (
+                        <div key={`${a.tankId || a.tankName || "tank"}-${idx}`} className="rounded-lg px-3 py-2" style={{ background: "rgba(12, 12, 14,0.5)" }}>
+                          <p className="text-pond-200/65">{a.tankName || "Unnamed tank"}</p>
+                          <p className="text-pond-200 font-medium mt-0.5">{Number(a.fishCount || 0).toLocaleString()} fish</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
