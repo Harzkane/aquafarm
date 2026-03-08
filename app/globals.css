@@ -1,0 +1,211 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --pond-dark:   #0b0b0d;
+  --pond-mid:    #15161a;
+  --pond-green:  #374151;
+  --pond-light:  #4b5563;
+  --water-deep:  #064b71;
+  --water-mid:   #006ba5;
+  --water-light: #00a8f0;
+  --mud-warm:    #b68d45;
+  --success:     #22c55e;
+  --danger:      #f87171;
+  --warning:     #fbbf24;
+  --card-bg:     rgba(21, 22, 26, 0.7);
+  --card-border: rgba(148, 163, 184, 0.22);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--pond-dark);
+  color: #e5e7eb;
+  min-height: 100vh;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgba(12, 12, 14, 0.65); }
+::-webkit-scrollbar-thumb { background: var(--pond-green); border-radius: 3px; }
+
+@layer components {
+  /* Glass card */
+  .glass-card {
+    @apply relative rounded-2xl border overflow-hidden;
+    background: var(--card-bg);
+    border-color: var(--card-border);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .glass-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.035) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  /* Stat card glow */
+  .stat-card {
+    @apply glass-card p-5 transition-all duration-300 hover:scale-[1.02] cursor-default;
+    box-shadow: 0 4px 24px rgba(10, 10, 11, 0.55);
+  }
+
+  .stat-card:hover {
+    border-color: rgba(148, 163, 184, 0.45);
+    box-shadow: 0 8px 32px rgba(10, 10, 11, 0.65), 0 0 18px rgba(148, 163, 184, 0.14);
+  }
+
+  /* Input fields */
+  .field {
+    @apply w-full rounded-xl border px-4 py-3 text-sm font-body outline-none transition-all duration-200;
+    background: rgba(12, 12, 14, 0.85);
+    border-color: rgba(148, 163, 184, 0.3);
+    color: #e5e7eb;
+  }
+
+  .field::placeholder { color: rgba(229, 231, 235, 0.5); }
+
+  .field:focus {
+    border-color: #9ca3af;
+    box-shadow: 0 0 0 3px rgba(156, 163, 175, 0.18);
+  }
+
+  /* Buttons */
+  .btn-primary {
+    @apply flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-medium font-body transition-all duration-200 active:scale-95;
+    background: linear-gradient(135deg, #374151, #1f2937);
+    color: white;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.45);
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 6px 24px rgba(15, 23, 42, 0.55);
+    transform: translateY(-1px);
+  }
+
+  .btn-secondary {
+    @apply flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-medium font-body border transition-all duration-200 active:scale-95;
+    background: rgba(31, 41, 55, 0.45);
+    border-color: rgba(148, 163, 184, 0.3);
+    color: #d1d5db;
+  }
+
+  .btn-secondary:hover {
+    background: rgba(31, 41, 55, 0.7);
+    border-color: rgba(148, 163, 184, 0.5);
+  }
+
+  /* Badge */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium;
+  }
+
+  .badge-green  { background: rgba(34, 197, 94, 0.2);  color: #86efac; border: 1px solid rgba(34,197,94,0.35);  }
+  .badge-water  { background: rgba(0, 134, 204, 0.2);  color: #75d7ff; border: 1px solid rgba(0,134,204,0.3);  }
+  .badge-amber  { background: rgba(182, 141, 69, 0.2); color: #d3bf86; border: 1px solid rgba(182,141,69,0.3); }
+  .badge-red    { background: rgba(220, 53, 69, 0.2);  color: #f87171; border: 1px solid rgba(220,53,69,0.3);  }
+
+  /* Section heading */
+  .section-title {
+    @apply font-display text-xl font-semibold tracking-tight;
+    color: #f3f4f6;
+  }
+
+  /* Nav item */
+  .nav-item {
+    @apply flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200;
+    color: rgba(229, 231, 235, 0.78);
+  }
+
+  .nav-item:hover {
+    background: rgba(148, 163, 184, 0.12);
+    color: #f3f4f6;
+  }
+
+  .nav-item.active {
+    background: rgba(148, 163, 184, 0.14);
+    color: #f3f4f6;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+  }
+
+  /* Progress bar */
+  .progress-track {
+    @apply h-2 rounded-full overflow-hidden;
+    background: rgba(12, 12, 14, 0.85);
+  }
+
+  .progress-fill {
+    @apply h-full rounded-full transition-all duration-700;
+    background: linear-gradient(90deg, #4b5563, #9ca3af);
+  }
+
+  /* Shimmer loading */
+  .shimmer {
+    background: linear-gradient(90deg,
+      rgba(148,163,184,0.06) 0%,
+      rgba(148,163,184,0.16) 50%,
+      rgba(148,163,184,0.06) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
+
+  /* Water ripple bg */
+  .ripple-bg {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .ripple-bg::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 20% 80%, rgba(0,134,204,0.08) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, rgba(148,163,184,0.08) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  /* Chart container */
+  .chart-wrap {
+    @apply glass-card p-6;
+  }
+
+  /* Table */
+  .data-table { @apply w-full text-sm; }
+  .data-table th {
+    @apply px-4 py-3 text-left text-xs font-medium uppercase tracking-wider;
+    color: rgba(229, 231, 235, 0.8);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+  }
+  .data-table td {
+    @apply px-4 py-3;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    color: rgba(229, 231, 235, 0.88);
+  }
+  .data-table tr:hover td { background: rgba(148, 163, 184, 0.08); }
+  .data-table tr:last-child td { border-bottom: none; }
+
+  .text-success { color: var(--success); }
+  .text-danger { color: var(--danger); }
+  .text-warning { color: var(--warning); }
+}
+
+/* Animated background mesh */
+.bg-mesh {
+  background-color: #0b0b0d;
+  background-image:
+    radial-gradient(at 20% 80%, rgba(6,75,113,0.4) 0px, transparent 50%),
+    radial-gradient(at 80% 10%, rgba(75,85,99,0.28) 0px, transparent 50%),
+    radial-gradient(at 50% 50%, rgba(12,12,14,0.9) 0px, transparent 70%);
+}
+
+.bg-dashboard {
+  background-color: #0b0b0d;
+  background-image:
+    linear-gradient(180deg, rgba(31, 41, 55, 0.24) 0%, rgba(11, 11, 13, 0) 30%);
+}

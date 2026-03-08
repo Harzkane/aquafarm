@@ -1,0 +1,164 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { connectDB } from "@/lib/db";
+import { Batch } from "@/models/Batch";
+import { Types } from "mongoose";
+
+type UpdateBody = {
+  name?: string;
+  stockingDate?: string;
+  initialCount?: number;
+  juvenileCost?: number;
+  targetWeight?: number;
+  notes?: string;
+  status?: "active" | "harvested" | "partial";
+  harvestDate?: string | null;
+  harvestedWeightKg?: number;
+  harvestPricePerKg?: number;
+  harvestNotes?: string;
+};
+
+function validateUpdate(body: UpdateBody) {
+  const update: Record<string, any> = {};
+
+  if (body.name !== undefined) {
+    const name = String(body.name).trim();
+    if (!name) return { ok: false as const, error: "Batch name is required" };
+    update.name = name;
+  }
+
+  if (body.stockingDate !== undefined) {
+    const d = new Date(body.stockingDate);
+    if (Number.isNaN(d.getTime())) return { ok: false as const, error: "Stocking date is invalid" };
+    update.stockingDate = d;
+  }
+
+  if (body.initialCount !== undefined) {
+    const n = Number(body.initialCount);
+    if (!Number.isFinite(n) || n <= 0) {
+      return { ok: false as const, error: "Initial fish count must be greater than 0" };
+    }
+    update.initialCount = Math.round(n);
+  }
+
+  if (body.juvenileCost !== undefined) {
+    const c = Number(body.juvenileCost);
+    if (!Number.isFinite(c) || c < 0) return { ok: false as const, error: "Juvenile cost cannot be negative" };
+    update.juvenileCost = c;
+  }
+
+  if (body.targetWeight !== undefined) {
+    const w = Number(body.targetWeight);
+    if (!Number.isFinite(w) || w <= 0) return { ok: false as const, error: "Target weight must be greater than 0" };
+    update.targetWeight = w;
+  }
+
+  if (body.notes !== undefined) update.notes = String(body.notes).trim();
+
+  if (body.status !== undefined) {
+    if (!["active", "harvested", "partial"].includes(body.status)) {
+      return { ok: false as const, error: "Invalid status" };
+    }
+    update.status = body.status;
+  }
+
+  if (body.harvestDate !== undefined) {
+    if (body.harvestDate === null || body.harvestDate === "") {
+      update.harvestDate = null;
+    } else {
+      const d = new Date(body.harvestDate);
+      if (Number.isNaN(d.getTime())) return { ok: false as const, error: "Harvest date is invalid" };
+      update.harvestDate = d;
+    }
+  }
+
+  if (body.harvestedWeightKg !== undefined) {
+    const w = Number(body.harvestedWeightKg);
+    if (!Number.isFinite(w) || w < 0) return { ok: false as const, error: "Harvested weight cannot be negative" };
+    update.harvestedWeightKg = w;
+  }
+
+  if (body.harvestPricePerKg !== undefined) {
+    const p = Number(body.harvestPricePerKg);
+    if (!Number.isFinite(p) || p < 0) return { ok: false as const, error: "Harvest price cannot be negative" };
+    update.harvestPricePerKg = p;
+  }
+
+  if (body.harvestNotes !== undefined) update.harvestNotes = String(body.harvestNotes).trim();
+
+  return { ok: true as const, value: update };
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = (await req.json()) as UpdateBody;
+  const validated = validateUpdate(body);
+  if (!validated.ok) return NextResponse.json({ error: validated.error }, { status: 400 });
+  if (!Types.ObjectId.isValid(params.id)) {
+    return NextResponse.json({ error: "Invalid batch id" }, { status: 400 });
+  }
+
+  await connectDB();
+  const userId = (session.user as any).id;
+  const existing = await Batch.findOne({
+    _id: params.id,
+    userId,
+    $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
+  });
+  if (!existing) return NextResponse.json({ error: "Batch not found" }, { status: 404 });
+
+  const update = validated.value;
+  // Keep currentCount in sync if initial count is being edited before any mortality/growth adjustments.
+  if (
+    typeof update.initialCount === "number" &&
+    existing.currentCount === existing.initialCount
+  ) {
+    update.currentCount = update.initialCount;
+  }
+
+  if (update.status === "active") {
+    // Reopen clears harvested metadata to avoid stale values.
+    update.harvestDate = null;
+    update.harvestedWeightKg = null;
+    update.harvestPricePerKg = null;
+    update.harvestNotes = "";
+  }
+
+  const updated = await Batch.findOneAndUpdate(
+    {
+      _id: params.id,
+      userId,
+      $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
+    },
+    { $set: update },
+    { new: true }
+  );
+
+  return NextResponse.json(updated);
+}
+
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!Types.ObjectId.isValid(params.id)) {
+    return NextResponse.json({ error: "Invalid batch id" }, { status: 400 });
+  }
+
+  await connectDB();
+  const userId = (session.user as any).id;
+  const deleted = await Batch.findOneAndUpdate(
+    {
+      _id: params.id,
+      userId,
+      $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
+    },
+    { $set: { deletedAt: new Date() } },
+    { new: true }
+  );
+
+  if (!deleted) return NextResponse.json({ error: "Batch not found" }, { status: 404 });
+  return NextResponse.json({ success: true });
+}
