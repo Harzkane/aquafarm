@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import {
   LayoutDashboard, Fish, ClipboardList, Skull,
-  TrendingUp, Waves, Calendar, LogOut, Menu, X, Droplets,
+  TrendingUp, Waves, Calendar, LogOut, Menu, X, Droplets, TestTube2, ShoppingBasket, Wheat, FileBarChart2, BookOpen,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -14,7 +14,12 @@ const NAV = [
   { href: "/batches",     icon: Fish,             label: "Batches"         },
   { href: "/feeding",     icon: ClipboardList,    label: "Daily Log"       },
   { href: "/mortality",   icon: Skull,            label: "Mortality"       },
+  { href: "/water-quality", icon: TestTube2,      label: "Water Quality"   },
+  { href: "/feed-inventory", icon: Wheat,         label: "Feed Inventory"  },
+  { href: "/harvest",     icon: ShoppingBasket,   label: "Harvest"         },
   { href: "/financials",  icon: TrendingUp,       label: "Financials"      },
+  { href: "/reports",     icon: FileBarChart2,    label: "Reports"         },
+  { href: "/playbook",    icon: BookOpen,         label: "Playbook"        },
   { href: "/tanks",       icon: Waves,            label: "Tanks"           },
   { href: "/calendar",    icon: Calendar,         label: "Calendar"        },
 ];

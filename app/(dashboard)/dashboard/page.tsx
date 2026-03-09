@@ -5,6 +5,7 @@ import { Batch } from "@/models/Batch";
 import { DailyLog } from "@/models/DailyLog";
 import { Financial } from "@/models/Financial";
 import { Tank } from "@/models/Tank";
+import { FeedInventory } from "@/models/FeedInventory";
 import DashboardClient from "./DashboardClient";
 import { getBatchPhase, weeksSince } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ export default async function DashboardPage() {
   const batches = await Batch.find({ userId, status: "active" }).lean<any[]>();
   const tanks = await Tank.find({ userId }).lean<any[]>();
   const financials = await Financial.findOne({ userId }).lean<any>();
+  const feedInventory = await FeedInventory.findOne({ userId }).lean<any>();
 
   // Get last 30 days of logs for active batches
   const batchIds = batches.map((b: any) => b._id);
@@ -105,7 +107,30 @@ export default async function DashboardPage() {
       level: "warning",
       title: "Water quality out of range",
       detail: `${waterAlerts} recent log${waterAlerts > 1 ? "s show" : " shows"} pH/ammonia risk.`,
-      href: "/feeding",
+      href: "/water-quality",
+    });
+  }
+
+  const harvestReady = batches.filter((b: any) => weeksSince(b.stockingDate) >= 18).length;
+  if (harvestReady > 0) {
+    actions.push({
+      level: "info",
+      title: "Harvest window open",
+      detail: `${harvestReady} batch${harvestReady > 1 ? "es are" : " is"} in harvest range.`,
+      href: "/harvest",
+    });
+  }
+
+  const openingFeed = Number(feedInventory?.openingStockKg || 0);
+  const purchasedFeed = (feedInventory?.purchases || []).reduce((s: number, p: any) => s + Number(p.totalKg || 0), 0);
+  const consumedFeed = recentLogs.reduce((s: number, l: any) => s + Number(l.feedGiven || 0), 0);
+  const remainingFeed = Math.max(0, openingFeed + purchasedFeed - consumedFeed);
+  if (remainingFeed > 0 && remainingFeed <= 50) {
+    actions.push({
+      level: "warning",
+      title: "Feed stock running low",
+      detail: `Only about ${remainingFeed.toFixed(1)}kg remains based on logged feed use.`,
+      href: "/feed-inventory",
     });
   }
 
