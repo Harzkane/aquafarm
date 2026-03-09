@@ -217,7 +217,7 @@ export default function FeedInventoryPage() {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="font-display text-2xl font-semibold text-pond-100">Feed Inventory</h1>
-          <p className="text-pond-200/75 text-sm mt-1">Track purchases and auto-calculate stock balance from feed usage logs</p>
+          <p className="text-pond-200/75 text-sm mt-1">Track initial stock, purchases, and auto-calculate balance from feed usage logs</p>
         </div>
         <button className="btn-primary" onClick={() => { resetForm(); setShowCreate(true); }}>
           <Plus className="w-4 h-4" /> Add Purchase
@@ -229,15 +229,15 @@ export default function FeedInventoryPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="stat-card">
           <p className="text-xs text-pond-200/75 uppercase tracking-wider mb-2">Purchased (kg)</p>
-          <p className="font-mono text-2xl font-semibold text-water-300">{data.totals.purchasedKg.toFixed(1)}</p>
+          <p className="font-mono text-2xl font-semibold text-water-300">{data.totals.purchasedKg.toFixed(2)}</p>
         </div>
         <div className="stat-card">
           <p className="text-xs text-pond-200/75 uppercase tracking-wider mb-2">Consumed (kg)</p>
-          <p className="font-mono text-2xl font-semibold text-pond-200">{data.totals.consumedKg.toFixed(1)}</p>
+          <p className="font-mono text-2xl font-semibold text-pond-200">{data.totals.consumedKg.toFixed(2)}</p>
         </div>
         <div className="stat-card">
           <p className="text-xs text-pond-200/75 uppercase tracking-wider mb-2">Remaining (kg)</p>
-          <p className={`font-mono text-2xl font-semibold ${lowStock ? "text-danger" : "text-success"}`}>{data.totals.remainingKg.toFixed(1)}</p>
+          <p className={`font-mono text-2xl font-semibold ${lowStock ? "text-danger" : "text-success"}`}>{data.totals.remainingKg.toFixed(2)}</p>
         </div>
         <div className="stat-card">
           <p className="text-xs text-pond-200/75 uppercase tracking-wider mb-2">Estimated Days Left</p>
@@ -249,13 +249,16 @@ export default function FeedInventoryPage() {
 
       <div className="glass-card p-4 space-y-3">
         <h2 className="section-title !text-base">Stock Settings</h2>
+        <p className="text-xs text-pond-200/70">
+          Initial stock is feed already available before recorded purchases. It is added to Purchased (kg).
+        </p>
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
           <div>
-            <label className="block text-xs text-pond-300 mb-1.5 font-medium">Opening Stock (kg)</label>
+            <label className="block text-xs text-pond-300 mb-1.5 font-medium">Initial Stock (kg)</label>
             <input className="field" type="number" min={0} step="0.1" value={openingStockEdit} onChange={(e) => setOpeningStockEdit(e.target.value)} />
           </div>
           <button className="btn-secondary self-end" onClick={saveOpeningStock} disabled={saving}>
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Opening Stock"}
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Initial Stock"}
           </button>
         </div>
       </div>
@@ -485,4 +488,3 @@ export default function FeedInventoryPage() {
     </div>
   );
 }
-

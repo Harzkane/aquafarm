@@ -63,10 +63,14 @@ export async function GET() {
   const remainingKg = Math.max(0, openingStockKg + purchasedKg - consumedKg);
 
   const last14 = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
-  const consumed14 = logs
-    .filter((l: any) => new Date(l.date).getTime() >= last14.getTime())
-    .reduce((s: number, l: any) => s + Number(l.feedGiven || 0), 0);
-  const avgDailyUse = consumed14 / 14;
+  const logs14 = logs.filter((l: any) => new Date(l.date).getTime() >= last14.getTime());
+  const consumed14 = logs14.reduce((s: number, l: any) => s + Number(l.feedGiven || 0), 0);
+  const feedingDays14 = new Set(
+    logs14
+      .filter((l: any) => Number(l.feedGiven || 0) > 0)
+      .map((l: any) => new Date(l.date).toISOString().slice(0, 10))
+  ).size;
+  const avgDailyUse = feedingDays14 > 0 ? consumed14 / feedingDays14 : 0;
   const estimatedDaysLeft = avgDailyUse > 0 ? remainingKg / avgDailyUse : null;
 
   return NextResponse.json({
@@ -79,6 +83,7 @@ export async function GET() {
       remainingKg,
       avgDailyUse,
       estimatedDaysLeft,
+      feedingDays14,
     },
   });
 }
@@ -137,4 +142,3 @@ export async function PATCH(req: NextRequest) {
   );
   return NextResponse.json(inventory);
 }
-
