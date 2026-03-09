@@ -326,7 +326,37 @@ export default function MortalityPage() {
           <div className="px-5 py-4 border-b border-pond-700/20">
             <h2 className="section-title">Mortality Events</h2>
           </div>
-          <div className="overflow-x-auto">
+          <div className="md:hidden divide-y divide-pond-700/20">
+            {paginatedLogs.map((log) => {
+              const batchName = typeof log.batchId === "string" ? "—" : log.batchId?.name || "—";
+              return (
+                <div key={log._id} className="p-4 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm text-pond-200 font-medium">{batchName}</p>
+                    <p className="font-mono text-xs text-pond-300">
+                      {new Date(log.date).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <p className="text-pond-200/70">Session: <span className="text-pond-200 capitalize">{log.feedSession || "morning"}</span></p>
+                    <p className="text-pond-200/70">Tank: <span className="text-pond-200">{log.tankName || "—"}</span></p>
+                    <p className="text-pond-200/70">Deaths: <span className="text-danger font-mono">{log.mortality}</span></p>
+                    <p className="text-pond-200/70">Cause: <span className="text-mud-300 capitalize">{log.mortalityCause || "Unknown"}</span></p>
+                  </div>
+                  {log.observations && <p className="text-xs text-pond-200/70">{log.observations}</p>}
+                  <div className="flex items-center gap-2 pt-1">
+                    <button className="btn-secondary !px-2.5 !py-1.5 text-xs" onClick={() => startEdit(log)}>
+                      <Pencil className="w-3.5 h-3.5" /> Edit
+                    </button>
+                    <button className="btn-secondary !px-2.5 !py-1.5 text-xs text-danger" onClick={() => setDeletingLog(log)}>
+                      <Trash2 className="w-3.5 h-3.5" /> Delete
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="hidden md:block overflow-x-auto">
             <table className="data-table">
               <thead>
                 <tr>
@@ -394,13 +424,13 @@ export default function MortalityPage() {
 
       {editingLog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(12, 12, 14,0.85)", backdropFilter: "blur(8px)" }}>
-          <div className="glass-card w-full max-w-2xl p-6">
+          <div className="glass-card w-full max-w-2xl max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-display text-lg text-pond-100">Edit Mortality Event</h2>
               <button onClick={() => setEditingLog(null)} className="text-pond-200/75 hover:text-pond-300"><X className="w-5 h-5" /></button>
             </div>
             <form onSubmit={saveEdit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Batch *</label>
                   <select className="field" required value={editForm.batchId} onChange={(e) => setEditForm((f) => ({ ...f, batchId: e.target.value }))}>
@@ -417,7 +447,7 @@ export default function MortalityPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Tank</label>
                   <select className="field" value={editForm.tankName} onChange={(e) => setEditForm((f) => ({ ...f, tankName: e.target.value }))}>
@@ -456,7 +486,7 @@ export default function MortalityPage() {
 
       {deletingLog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(12, 12, 14,0.85)", backdropFilter: "blur(8px)" }}>
-          <div className="glass-card w-full max-w-md p-6 space-y-4">
+          <div className="glass-card w-full max-w-md max-h-[85vh] overflow-y-auto p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-display text-lg text-pond-100">Delete Mortality Event</h2>
               <button onClick={() => setDeletingLog(null)} className="text-pond-200/75 hover:text-pond-300"><X className="w-5 h-5" /></button>

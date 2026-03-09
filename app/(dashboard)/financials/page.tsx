@@ -442,7 +442,7 @@ export default function FinancialsPage() {
 
           {tab === "expense" ? (
             <form onSubmit={addExpense} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Category</label>
                   <select className="field" value={eForm.category} onChange={(e) => setEForm((f) => ({ ...f, category: e.target.value }))}>
@@ -471,7 +471,7 @@ export default function FinancialsPage() {
             </form>
           ) : (
             <form onSubmit={addRevenue} className="space-y-3">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Fish Sold</label>
                   <input className="field" type="number" required min={0} placeholder="0" value={rForm.fishSold} onChange={(e) => setRForm((f) => ({ ...f, fishSold: e.target.value }))} />
@@ -485,7 +485,7 @@ export default function FinancialsPage() {
                   <input className="field" type="number" min={0} placeholder="2800" value={rForm.pricePerKg} onChange={(e) => setRForm((f) => ({ ...f, pricePerKg: e.target.value }))} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Buyer</label>
                   <input className="field" placeholder="e.g. Mama Nkechi POK" value={rForm.buyer} onChange={(e) => setRForm((f) => ({ ...f, buyer: e.target.value }))} />
@@ -538,32 +538,72 @@ export default function FinancialsPage() {
         <div className="px-5 py-4 border-b border-pond-700/20">
           <h2 className="section-title">Per-Batch Profitability</h2>
         </div>
-        <div className="overflow-x-auto">
-          <table className="data-table">
-            <thead><tr><th>Batch</th><th>Revenue</th><th>Expenses</th><th>Net</th></tr></thead>
-            <tbody>
-              {profitabilityRows.length === 0 ? (
-                <tr><td colSpan={4} className="text-center text-pond-200/65">No data for selected filters</td></tr>
-              ) : (
-                profitabilityRows.map((r) => (
-                  <tr key={r.batchId}>
-                    <td className="text-xs">{r.batchName}</td>
-                    <td className="font-mono text-success">{formatNaira(r.revenue)}</td>
-                    <td className="font-mono text-danger">{formatNaira(r.expense)}</td>
-                    <td className={`font-mono ${r.net >= 0 ? "text-success" : "text-danger"}`}>{formatNaira(r.net)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        {profitabilityRows.length === 0 ? (
+          <div className="p-6 text-center text-pond-200/65 text-sm">No data for selected filters</div>
+        ) : (
+          <>
+            <div className="md:hidden divide-y divide-pond-700/20">
+              {profitabilityRows.map((r) => (
+                <div key={r.batchId} className="p-4 space-y-2">
+                  <p className="text-sm text-pond-200 font-medium">{r.batchName}</p>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <p className="text-pond-200/70">Revenue<br /><span className="font-mono text-success">{formatNaira(r.revenue)}</span></p>
+                    <p className="text-pond-200/70">Expenses<br /><span className="font-mono text-danger">{formatNaira(r.expense)}</span></p>
+                    <p className="text-pond-200/70">Net<br /><span className={`font-mono ${r.net >= 0 ? "text-success" : "text-danger"}`}>{formatNaira(r.net)}</span></p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="data-table">
+                <thead><tr><th>Batch</th><th>Revenue</th><th>Expenses</th><th>Net</th></tr></thead>
+                <tbody>
+                  {profitabilityRows.map((r) => (
+                    <tr key={r.batchId}>
+                      <td className="text-xs">{r.batchName}</td>
+                      <td className="font-mono text-success">{formatNaira(r.revenue)}</td>
+                      <td className="font-mono text-danger">{formatNaira(r.expense)}</td>
+                      <td className={`font-mono ${r.net >= 0 ? "text-success" : "text-danger"}`}>{formatNaira(r.net)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="glass-card overflow-hidden">
         <div className="px-5 py-4 border-b border-pond-700/20">
           <h2 className="section-title">Recent Transactions</h2>
         </div>
-        <div className="overflow-x-auto">
+        <div className="md:hidden divide-y divide-pond-700/20">
+          {paginatedTransactions.map((tx, i) => (
+            <div key={`${tx.id || "noid"}-${i}`} className="p-4 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className={`badge ${tx.type === "revenue" ? "badge-green" : "badge-red"}`}>{tx.type === "revenue" ? "Sale" : "Expense"}</span>
+                <p className="text-xs text-pond-200/65 font-mono">{new Date(tx.date).toLocaleDateString("en-NG", { day: "numeric", month: "short" })}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <p className="text-pond-200/70">Batch: <span className="text-pond-200">{tx.batchId ? (batchNameMap[tx.batchId] || "Unknown") : "General"}</span></p>
+                <p className="text-pond-200/70">Category: <span className="text-pond-200 capitalize">{tx.category || "—"}</span></p>
+              </div>
+              <p className="text-xs text-pond-400/70">{tx.description || "—"}</p>
+              <p className={`font-mono text-sm font-medium ${tx.type === "revenue" ? "text-success" : "text-danger"}`}>
+                {tx.type === "revenue" ? "+" : "-"}{formatNaira(tx.amount || 0)}
+              </p>
+              <div className="flex items-center gap-2 pt-1">
+                <button className="btn-secondary !px-2.5 !py-1.5 text-xs" onClick={() => openEdit(tx)} disabled={!tx.id}>
+                  <Pencil className="w-3.5 h-3.5" /> Edit
+                </button>
+                <button className="btn-secondary !px-2.5 !py-1.5 text-xs text-danger" onClick={() => setDeletingTx(tx)} disabled={!tx.id}>
+                  <Trash2 className="w-3.5 h-3.5" /> Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="hidden md:block overflow-x-auto">
           <table className="data-table">
             <thead><tr><th>Type</th><th>Batch</th><th>Category</th><th>Description</th><th>Amount</th><th>Date</th><th>Actions</th></tr></thead>
             <tbody>
@@ -619,7 +659,7 @@ export default function FinancialsPage() {
 
       {editingTx && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(12, 12, 14,0.85)", backdropFilter: "blur(8px)" }}>
-          <div className="glass-card w-full max-w-xl p-6">
+          <div className="glass-card w-full max-w-xl max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-display text-lg text-pond-100">Edit Transaction</h2>
               <button onClick={() => setEditingTx(null)} className="text-pond-200/75 hover:text-pond-300"><X className="w-5 h-5" /></button>
@@ -627,7 +667,7 @@ export default function FinancialsPage() {
 
             {editTab === "expense" ? (
               <form onSubmit={saveEdit} className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-pond-300 mb-1.5 font-medium">Category</label>
                     <select className="field" value={editExpense.category} onChange={(e) => setEditExpense((f) => ({ ...f, category: e.target.value }))}>
@@ -643,7 +683,7 @@ export default function FinancialsPage() {
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Description</label>
                   <input className="field" value={editExpense.description} onChange={(e) => setEditExpense((f) => ({ ...f, description: e.target.value }))} />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-pond-300 mb-1.5 font-medium">Batch</label>
                     <select className="field" value={editExpense.batchId} onChange={(e) => setEditExpense((f) => ({ ...f, batchId: e.target.value }))}>
@@ -663,7 +703,7 @@ export default function FinancialsPage() {
               </form>
             ) : (
               <form onSubmit={saveEdit} className="space-y-3">
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-xs text-pond-300 mb-1.5 font-medium">Fish Sold</label>
                     <input className="field" type="number" min={0} value={editRevenue.fishSold} onChange={(e) => setEditRevenue((f) => ({ ...f, fishSold: e.target.value }))} />
@@ -677,7 +717,7 @@ export default function FinancialsPage() {
                     <input className="field" type="number" min={0} value={editRevenue.pricePerKg} onChange={(e) => setEditRevenue((f) => ({ ...f, pricePerKg: e.target.value }))} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-pond-300 mb-1.5 font-medium">Buyer</label>
                     <input className="field" value={editRevenue.buyer} onChange={(e) => setEditRevenue((f) => ({ ...f, buyer: e.target.value }))} />
@@ -689,7 +729,7 @@ export default function FinancialsPage() {
                     </select>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-pond-300 mb-1.5 font-medium">Batch</label>
                     <select className="field" value={editRevenue.batchId} onChange={(e) => setEditRevenue((f) => ({ ...f, batchId: e.target.value }))}>
@@ -714,7 +754,7 @@ export default function FinancialsPage() {
 
       {deletingTx && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(12, 12, 14,0.85)", backdropFilter: "blur(8px)" }}>
-          <div className="glass-card w-full max-w-md p-6 space-y-4">
+          <div className="glass-card w-full max-w-md max-h-[85vh] overflow-y-auto p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-display text-lg text-pond-100">Delete Transaction</h2>
               <button onClick={() => setDeletingTx(null)} className="text-pond-200/75 hover:text-pond-300"><X className="w-5 h-5" /></button>

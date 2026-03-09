@@ -241,7 +241,7 @@ export default function CalendarPage() {
 
           return (
             <div key={batch._id} className="glass-card p-5 space-y-5">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg,#4b5563,#064b71)" }}>
                   <Fish className="w-4 h-4 text-white" />
                 </div>
@@ -249,7 +249,7 @@ export default function CalendarPage() {
                   <h2 className="font-display text-lg text-pond-100">{batch.name}</h2>
                   <p className="text-xs text-pond-200/75">Started {format(stockDate, "d MMM yyyy")} · Currently Week {weeks} · {phase}</p>
                 </div>
-                <span className="ml-auto badge badge-green">Week {weeks} / 18</span>
+                <span className="sm:ml-auto badge badge-green shrink-0 whitespace-nowrap">Week {weeks} / 18</span>
               </div>
 
               <div className="relative">
@@ -358,7 +358,7 @@ export default function CalendarPage() {
                     {activeAllocations.length === 0 && fallbackLiveAllocations.length > 0 && (
                       <p className="text-[11px] text-pond-200/65">Showing inferred live tank counts. Add a fish movement to start explicit batch-linked allocation.</p>
                     )}
-                    <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                       {displayAllocations.map((a, idx) => (
                         <div key={`${a.tankId || a.tankName || "tank"}-${idx}`} className="rounded-lg px-3 py-2" style={{ background: "rgba(12, 12, 14,0.5)" }}>
                           <p className="text-pond-200/65">{a.tankName || "Unnamed tank"}</p>

@@ -301,62 +301,97 @@ export default function FeedingPage() {
             <div className="px-5 py-4 border-b border-pond-700/20">
               <h2 className="section-title">Recent Entries</h2>
             </div>
-            <div className="overflow-x-auto">
-              {visibleLogs.length === 0 ? (
-                <div className="p-12 text-center">
-                  <Fish className="w-10 h-10 text-pond-500 mx-auto mb-3 opacity-40" />
-                  <p className="text-pond-200/65 text-sm">No entries found with current filter</p>
-                </div>
-              ) : (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Date</th><th>Session</th><th>Batch</th><th>Tank</th><th>Feed (kg)</th>
-                      <th>Deaths</th><th>pH</th><th>Ammonia</th><th>Temp</th><th>Observations</th><th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedLogs.map((log) => {
-                      const batchName = typeof log.batchId === "string" ? "—" : log.batchId?.name || "—";
-                      return (
-                        <tr key={log._id}>
-                          <td className="font-mono text-xs text-pond-300">
+            {visibleLogs.length === 0 ? (
+              <div className="p-12 text-center">
+                <Fish className="w-10 h-10 text-pond-500 mx-auto mb-3 opacity-40" />
+                <p className="text-pond-200/65 text-sm">No entries found with current filter</p>
+              </div>
+            ) : (
+              <>
+                <div className="md:hidden divide-y divide-pond-700/20">
+                  {paginatedLogs.map((log) => {
+                    const batchName = typeof log.batchId === "string" ? "—" : log.batchId?.name || "—";
+                    return (
+                      <div key={log._id} className="p-4 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm text-pond-200 font-medium">{batchName}</p>
+                          <p className="font-mono text-xs text-pond-300">
                             {new Date(log.date).toLocaleDateString("en-NG", { day: "numeric", month: "short" })}
-                          </td>
-                          <td className="text-xs capitalize">{log.feedSession || "morning"}</td>
-                          <td className="text-xs">{batchName}</td>
-                          <td className="text-xs">{log.tankName || "—"}</td>
-                          <td className="font-mono text-pond-200">{log.feedGiven || "—"}</td>
-                          <td>
-                            {log.mortality && log.mortality > 0 ? <span className="badge badge-red">{log.mortality}</span> : <span className="text-pond-500">—</span>}
-                          </td>
-                          <td className="font-mono text-xs">
-                            {log.ph != null ? <span className={log.ph >= 6.5 && log.ph <= 8 ? "text-success" : "text-danger"}>{log.ph}</span> : "—"}
-                          </td>
-                          <td className="font-mono text-xs">
-                            {log.ammonia != null ? <span className={(log.ammonia || 0) < 0.5 ? "text-success" : "text-danger"}>{log.ammonia}</span> : "—"}
-                          </td>
-                          <td className="font-mono text-xs">{log.temperature != null ? `${log.temperature}°` : "—"}</td>
-                          <td className="text-xs text-pond-200/65 max-w-[180px] truncate" title={log.observations || ""}>
-                            {log.observations || "—"}
-                          </td>
-                          <td>
-                            <div className="flex items-center gap-1">
-                              <button className="btn-secondary !px-2 !py-1 text-xs" onClick={() => startEdit(log)}>
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                              <button className="btn-secondary !px-2 !py-1 text-xs text-danger" onClick={() => setDeletingLog(log)}>
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <p className="text-pond-200/70">Session: <span className="text-pond-200 capitalize">{log.feedSession || "morning"}</span></p>
+                          <p className="text-pond-200/70">Tank: <span className="text-pond-200">{log.tankName || "—"}</span></p>
+                          <p className="text-pond-200/70">Feed: <span className="font-mono text-pond-200">{log.feedGiven || "—"} kg</span></p>
+                          <p className="text-pond-200/70">Deaths: {log.mortality && log.mortality > 0 ? <span className="text-danger font-mono">{log.mortality}</span> : <span className="text-pond-500">—</span>}</p>
+                          <p className="text-pond-200/70">pH: {log.ph != null ? <span className={`font-mono ${log.ph >= 6.5 && log.ph <= 8 ? "text-success" : "text-danger"}`}>{log.ph}</span> : <span className="text-pond-500">—</span>}</p>
+                          <p className="text-pond-200/70">NH3: {log.ammonia != null ? <span className={`font-mono ${(log.ammonia || 0) < 0.5 ? "text-success" : "text-danger"}`}>{log.ammonia}</span> : <span className="text-pond-500">—</span>}</p>
+                        </div>
+                        {log.observations && <p className="text-xs text-pond-200/70">{log.observations}</p>}
+                        <div className="flex items-center gap-2 pt-1">
+                          <button className="btn-secondary !px-2.5 !py-1.5 text-xs" onClick={() => startEdit(log)}>
+                            <Pencil className="w-3.5 h-3.5" /> Edit
+                          </button>
+                          <button className="btn-secondary !px-2.5 !py-1.5 text-xs text-danger" onClick={() => setDeletingLog(log)}>
+                            <Trash2 className="w-3.5 h-3.5" /> Delete
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Date</th><th>Session</th><th>Batch</th><th>Tank</th><th>Feed (kg)</th>
+                        <th>Deaths</th><th>pH</th><th>Ammonia</th><th>Temp</th><th>Observations</th><th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedLogs.map((log) => {
+                        const batchName = typeof log.batchId === "string" ? "—" : log.batchId?.name || "—";
+                        return (
+                          <tr key={log._id}>
+                            <td className="font-mono text-xs text-pond-300">
+                              {new Date(log.date).toLocaleDateString("en-NG", { day: "numeric", month: "short" })}
+                            </td>
+                            <td className="text-xs capitalize">{log.feedSession || "morning"}</td>
+                            <td className="text-xs">{batchName}</td>
+                            <td className="text-xs">{log.tankName || "—"}</td>
+                            <td className="font-mono text-pond-200">{log.feedGiven || "—"}</td>
+                            <td>
+                              {log.mortality && log.mortality > 0 ? <span className="badge badge-red">{log.mortality}</span> : <span className="text-pond-500">—</span>}
+                            </td>
+                            <td className="font-mono text-xs">
+                              {log.ph != null ? <span className={log.ph >= 6.5 && log.ph <= 8 ? "text-success" : "text-danger"}>{log.ph}</span> : "—"}
+                            </td>
+                            <td className="font-mono text-xs">
+                              {log.ammonia != null ? <span className={(log.ammonia || 0) < 0.5 ? "text-success" : "text-danger"}>{log.ammonia}</span> : "—"}
+                            </td>
+                            <td className="font-mono text-xs">{log.temperature != null ? `${log.temperature}°` : "—"}</td>
+                            <td className="text-xs text-pond-200/65 max-w-[180px] truncate" title={log.observations || ""}>
+                              {log.observations || "—"}
+                            </td>
+                            <td>
+                              <div className="flex items-center gap-1">
+                                <button className="btn-secondary !px-2 !py-1 text-xs" onClick={() => startEdit(log)}>
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button className="btn-secondary !px-2 !py-1 text-xs text-danger" onClick={() => setDeletingLog(log)}>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
             {visibleLogs.length > 0 && (
               <div className="px-5 py-3 border-t border-pond-700/20 flex items-center justify-between gap-3 flex-wrap">
                 <p className="text-xs text-pond-200/65">
@@ -389,7 +424,7 @@ export default function FeedingPage() {
 
       {showEntryForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(12, 12, 14,0.85)", backdropFilter: "blur(8px)" }}>
-          <div className="glass-card w-full max-w-2xl p-6">
+          <div className="glass-card w-full max-w-2xl max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-display text-lg text-pond-100">Today&apos;s Entry</h2>
               <button onClick={() => setShowEntryForm(false)} className="text-pond-200/75 hover:text-pond-300">
@@ -397,7 +432,7 @@ export default function FeedingPage() {
               </button>
             </div>
             <form onSubmit={submit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Batch *</label>
                   <select className="field" required value={form.batchId} onChange={(e) => update("batchId", e.target.value)}>
@@ -426,7 +461,7 @@ export default function FeedingPage() {
                 <p className="text-xs font-medium text-pond-300 flex items-center gap-1.5">
                   <Droplets className="w-3.5 h-3.5" /> Feeding
                 </p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-pond-200/75 mb-1">Feed Given (kg)</label>
                     <input className="field" type="number" step="0.1" placeholder="0.0" value={form.feedGiven} onChange={(e) => update("feedGiven", e.target.value)} />
@@ -442,7 +477,7 @@ export default function FeedingPage() {
                 <p className="text-xs font-medium text-water-300 flex items-center gap-1.5">
                   <ThermometerSun className="w-3.5 h-3.5" /> Water Quality
                 </p>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
                     <label className="block text-xs text-pond-200/75 mb-1">pH</label>
                     <input className="field" type="number" step="0.1" placeholder="7.2" value={form.ph} onChange={(e) => update("ph", e.target.value)} />
@@ -470,7 +505,7 @@ export default function FeedingPage() {
                 <p className="text-xs font-medium text-red-300 flex items-center gap-1.5">
                   <Skull className="w-3.5 h-3.5" /> Mortality
                 </p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-pond-200/75 mb-1">Deaths today</label>
                     <input className="field" type="number" min="0" placeholder="0" value={form.mortality} onChange={(e) => update("mortality", e.target.value)} />
@@ -503,7 +538,7 @@ export default function FeedingPage() {
 
       {editingLog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(12, 12, 14,0.85)", backdropFilter: "blur(8px)" }}>
-          <div className="glass-card w-full max-w-2xl p-6">
+          <div className="glass-card w-full max-w-2xl max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-display text-lg text-pond-100">Edit Daily Log</h2>
               <button onClick={() => setEditingLog(null)} className="text-pond-200/75 hover:text-pond-300">
@@ -512,7 +547,7 @@ export default function FeedingPage() {
             </div>
 
             <form onSubmit={saveEdit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Batch *</label>
                   <select className="field" required value={editForm.batchId} onChange={(e) => updateEdit("batchId", e.target.value)}>
@@ -535,7 +570,7 @@ export default function FeedingPage() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Feed (kg)</label>
                   <input className="field" type="number" step="0.1" value={editForm.feedGiven} onChange={(e) => updateEdit("feedGiven", e.target.value)} />
@@ -552,7 +587,7 @@ export default function FeedingPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">pH</label>
                   <input className="field" type="number" step="0.1" value={editForm.ph} onChange={(e) => updateEdit("ph", e.target.value)} />
@@ -586,7 +621,7 @@ export default function FeedingPage() {
 
       {deletingLog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(12, 12, 14,0.85)", backdropFilter: "blur(8px)" }}>
-          <div className="glass-card w-full max-w-md p-6 space-y-4">
+          <div className="glass-card w-full max-w-md max-h-[85vh] overflow-y-auto p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-display text-lg text-pond-100">Delete Log Entry</h2>
               <button onClick={() => setDeletingLog(null)} className="text-pond-200/75 hover:text-pond-300">

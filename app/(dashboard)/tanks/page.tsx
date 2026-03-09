@@ -632,7 +632,7 @@ export default function TanksPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div
                   className="rounded-lg px-3 py-2"
                   style={{
@@ -693,63 +693,83 @@ export default function TanksPage() {
           <h2 className="section-title">Movement History</h2>
           <p className="text-xs text-pond-200/65">{movements.length} records</p>
         </div>
-        <div className="overflow-x-auto">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Batch</th>
-                <th>From</th>
-                <th>To</th>
-                <th>Count</th>
-                <th>Reason</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {movements.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="text-center text-pond-200/65">
-                    No movements recorded yet
-                  </td>
-                </tr>
-              ) : (
-                movements.map((move) => (
-                  <tr key={move._id}>
-                    <td className="font-mono text-xs">
+        {movements.length === 0 ? (
+          <div className="p-6 text-center text-pond-200/65 text-sm">No movements recorded yet</div>
+        ) : (
+          <>
+            <div className="md:hidden divide-y divide-pond-700/20">
+              {movements.map((move) => (
+                <div key={move._id} className="p-4 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm text-pond-200 font-medium">{move.fromTankName} → {move.toTankName}</p>
+                    <p className="font-mono text-xs text-pond-300">
                       {new Date(move.date).toLocaleDateString("en-NG", {
                         day: "numeric",
                         month: "short",
                         year: "numeric",
                       })}
-                    </td>
-                    <td className="text-xs">
-                      {typeof move.batchId === "string"
-                        ? "—"
-                        : move.batchId?.name || "—"}
-                    </td>
-                    <td className="text-xs">{move.fromTankName}</td>
-                    <td className="text-xs">{move.toTankName}</td>
-                    <td>
-                      <span className="badge badge-water font-mono">
-                        {move.count}
-                      </span>
-                    </td>
-                    <td className="text-xs capitalize">
-                      {move.reason || "sorting"}
-                    </td>
-                    <td
-                      className="text-xs text-pond-200/65 max-w-xs truncate"
-                      title={move.notes || ""}
-                    >
-                      {move.notes || "—"}
-                    </td>
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <p className="text-pond-200/70">Batch: <span className="text-pond-200">{typeof move.batchId === "string" ? "—" : move.batchId?.name || "—"}</span></p>
+                    <p className="text-pond-200/70">Count: <span className="font-mono text-water-300">{move.count}</span></p>
+                    <p className="text-pond-200/70">Reason: <span className="text-pond-200 capitalize">{move.reason || "sorting"}</span></p>
+                  </div>
+                  {move.notes && <p className="text-xs text-pond-200/70">{move.notes}</p>}
+                </div>
+              ))}
+            </div>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Batch</th>
+                    <th>From</th>
+                    <th>To</th>
+                    <th>Count</th>
+                    <th>Reason</th>
+                    <th>Notes</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {movements.map((move) => (
+                    <tr key={move._id}>
+                      <td className="font-mono text-xs">
+                        {new Date(move.date).toLocaleDateString("en-NG", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </td>
+                      <td className="text-xs">
+                        {typeof move.batchId === "string"
+                          ? "—"
+                          : move.batchId?.name || "—"}
+                      </td>
+                      <td className="text-xs">{move.fromTankName}</td>
+                      <td className="text-xs">{move.toTankName}</td>
+                      <td>
+                        <span className="badge badge-water font-mono">
+                          {move.count}
+                        </span>
+                      </td>
+                      <td className="text-xs capitalize">
+                        {move.reason || "sorting"}
+                      </td>
+                      <td
+                        className="text-xs text-pond-200/65 max-w-xs truncate"
+                        title={move.notes || ""}
+                      >
+                        {move.notes || "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
 
       {showMoveModal && (
@@ -760,7 +780,7 @@ export default function TanksPage() {
             backdropFilter: "blur(8px)",
           }}
         >
-          <div className="glass-card w-full max-w-lg p-6">
+          <div className="glass-card w-full max-w-lg max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-display text-lg text-pond-100">
                 Move Fish (Sorting/Transfer)
@@ -799,7 +819,7 @@ export default function TanksPage() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">
                     From Tank *
@@ -844,7 +864,7 @@ export default function TanksPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">
                     Count *
@@ -955,7 +975,7 @@ export default function TanksPage() {
             backdropFilter: "blur(8px)",
           }}
         >
-          <div className="glass-card w-full max-w-md p-6">
+          <div className="glass-card w-full max-w-md max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-display text-lg text-pond-100">Add Tank</h2>
               <button
@@ -979,7 +999,7 @@ export default function TanksPage() {
                   }
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">
                     Type
@@ -1017,7 +1037,7 @@ export default function TanksPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">
                     Status
@@ -1140,7 +1160,7 @@ export default function TanksPage() {
             backdropFilter: "blur(8px)",
           }}
         >
-          <div className="glass-card w-full max-w-md p-6">
+          <div className="glass-card w-full max-w-md max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-display text-lg text-pond-100">Edit Tank</h2>
               <button
@@ -1164,7 +1184,7 @@ export default function TanksPage() {
                   }
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">
                     Type
@@ -1202,7 +1222,7 @@ export default function TanksPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">
                     Status
@@ -1325,7 +1345,7 @@ export default function TanksPage() {
             backdropFilter: "blur(8px)",
           }}
         >
-          <div className="glass-card w-full max-w-md p-6 space-y-4">
+          <div className="glass-card w-full max-w-md max-h-[85vh] overflow-y-auto p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-display text-lg text-pond-100">
                 Delete Tank

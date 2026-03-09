@@ -378,7 +378,7 @@ export default function BatchesPage() {
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(12, 12, 14,0.85)", backdropFilter: "blur(8px)" }}>
-          <div className="glass-card w-full max-w-md p-6">
+          <div className="glass-card w-full max-w-md max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-display text-lg text-pond-100">New Batch</h2>
               <button onClick={() => setShowForm(false)} className="text-pond-200/75 hover:text-pond-300">
@@ -390,7 +390,7 @@ export default function BatchesPage() {
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Batch Name</label>
                 <input className="field" required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Fish Count</label>
                   <input className="field" type="number" min={1} required value={form.initialCount} onChange={(e) => setForm((f) => ({ ...f, initialCount: +e.target.value }))} />
@@ -426,7 +426,7 @@ export default function BatchesPage() {
 
       {showEditForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(12, 12, 14,0.85)", backdropFilter: "blur(8px)" }}>
-          <div className="glass-card w-full max-w-md p-6">
+          <div className="glass-card w-full max-w-md max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-display text-lg text-pond-100">Edit Batch</h2>
               <button onClick={() => { setShowEditForm(false); setEditingBatchId(null); }} className="text-pond-200/75 hover:text-pond-300">
@@ -438,7 +438,7 @@ export default function BatchesPage() {
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Batch Name</label>
                 <input className="field" required value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Fish Count</label>
                   <input className="field" type="number" min={1} required value={editForm.initialCount} onChange={(e) => setEditForm((f) => ({ ...f, initialCount: +e.target.value }))} />
@@ -474,7 +474,7 @@ export default function BatchesPage() {
 
       {showHarvestForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(12, 12, 14,0.85)", backdropFilter: "blur(8px)" }}>
-          <div className="glass-card w-full max-w-md p-6">
+          <div className="glass-card w-full max-w-md max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-display text-lg text-pond-100">Confirm Harvest</h2>
               <button onClick={() => { setShowHarvestForm(false); setHarvestBatchId(null); }} className="text-pond-200/75 hover:text-pond-300">
@@ -486,7 +486,7 @@ export default function BatchesPage() {
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Harvest Date</label>
                 <input className="field" type="date" required value={harvestForm.harvestDate} onChange={(e) => setHarvestForm((f) => ({ ...f, harvestDate: e.target.value }))} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Harvested Weight (kg)</label>
                   <input className="field" type="number" min={0} step="0.1" value={harvestForm.harvestedWeightKg} onChange={(e) => setHarvestForm((f) => ({ ...f, harvestedWeightKg: +e.target.value }))} />
@@ -514,7 +514,7 @@ export default function BatchesPage() {
 
       {confirmAction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(12, 12, 14,0.85)", backdropFilter: "blur(8px)" }}>
-          <div className="glass-card w-full max-w-md p-6 space-y-4">
+          <div className="glass-card w-full max-w-md max-h-[85vh] overflow-y-auto p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-display text-lg text-pond-100">
                 {confirmAction.kind === "delete" ? "Delete Batch" : "Reopen Batch"}
@@ -584,7 +584,7 @@ export default function BatchesPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
                     { label: "Fish Alive", value: batch.currentCount.toLocaleString(), color: "#9ca3af" },
                     { label: "Survival", value: `${survival}%`, color: +survival > 85 ? "#9ca3af" : "#d3bf86" },
