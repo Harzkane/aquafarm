@@ -1,80 +1,37 @@
-❯ clear
-❯ npm run dev
-
-> aquafarm@0.1.0 dev
-> next dev
-
-  ▲ Next.js 14.2.5
-  - Local:        http://localhost:3000
-  - Environments: .env.local
-
- ✓ Starting...
- ✓ Ready in 4.7s
- ✓ Compiled /middleware in 149ms (73 modules)
- ○ Compiling /api/auth/[...nextauth] ...
- ✓ Compiled /api/auth/[...nextauth] in 571ms (269 modules)
- GET /api/auth/session 200 in 1089ms
- ○ Compiling /settings/billing ...
- ✓ Compiled /settings/billing in 2.8s (901 modules)
- POST /api/auth/_log 200 in 2886ms
- ✓ Compiled in 358ms (336 modules)
- GET /settings/billing 200 in 3238ms
- ✓ Compiled /manifest.webmanifest in 248ms (596 modules)
- GET /manifest.webmanifest 200 in 311ms
- ✓ Compiled /api/billing/status in 118ms (622 modules)
- GET /api/auth/session 200 in 437ms
- GET /api/auth/session 200 in 424ms
- GET /api/billing/status 200 in 500ms
- GET /api/billing/status 200 in 533ms
- ✓ Compiled /api/billing/checkout in 204ms (624 modules)
- ⨯ app/api/billing/checkout/route.ts (81:20) @ body
- ⨯ ReferenceError: body is not defined
-    at eval (webpack-internal:///(rsc)/./app/api/billing/checkout/route.ts:97:18)
-    at (rsc)/./app/api/billing/checkout/route.ts (/Users/harz/Downloads/aquafarm/.next/server/app/api/billing/checkout/route.js:192:1)
-    at __webpack_require__ (/Users/harz/Downloads/aquafarm/.next/server/webpack-runtime.js:33:43)
-    at eval (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader.js?name=app%2Fapi%2Fbilling%2Fcheckout%2Froute&page=%2Fapi%2Fbilling%2Fcheckout%2Froute&appPaths=&pagePath=private-next-app-dir%2Fapi%2Fbilling%2Fcheckout%2Froute.ts&appDir=%2FUsers%2Fharz%2FDownloads%2Faquafarm%2Fapp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=%2FUsers%2Fharz%2FDownloads%2Faquafarm&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=&preferredRegion=&middlewareConfig=e30%3D!:15:122)
-    at (rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader.js?name=app%2Fapi%2Fbilling%2Fcheckout%2Froute&page=%2Fapi%2Fbilling%2Fcheckout%2Froute&appPaths=&pagePath=private-next-app-dir%2Fapi%2Fbilling%2Fcheckout%2Froute.ts&appDir=%2FUsers%2Fharz%2FDownloads%2Faquafarm%2Fapp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=%2FUsers%2Fharz%2FDownloads%2Faquafarm&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=&preferredRegion=&middlewareConfig=e30%3D! (/Users/harz/Downloads/aquafarm/.next/server/app/api/billing/checkout/route.js:182:1)
-    at __webpack_require__ (/Users/harz/Downloads/aquafarm/.next/server/webpack-runtime.js:33:43)
-    at __webpack_exec__ (/Users/harz/Downloads/aquafarm/.next/server/app/api/billing/checkout/route.js:242:39)
-    at /Users/harz/Downloads/aquafarm/.next/server/app/api/billing/checkout/route.js:243:470
-    at __webpack_require__.X (/Users/harz/Downloads/aquafarm/.next/server/webpack-runtime.js:168:21)
-    at /Users/harz/Downloads/aquafarm/.next/server/app/api/billing/checkout/route.js:243:47
-    at Object.<anonymous> (/Users/harz/Downloads/aquafarm/.next/server/app/api/billing/checkout/route.js:246:3)
-    at Module._compile (node:internal/modules/cjs/loader:1706:14)
-    at Module._extensions..js (node:internal/modules/cjs/loader:1839:10)
-    at Module.load (node:internal/modules/cjs/loader:1441:32)
-    at Module._load (node:internal/modules/cjs/loader:1263:12)
-    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
-    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
-    at Module.require (node:internal/modules/cjs/loader:1463:12)
-    at mod.require (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/require-hook.js:65:28)
-    at require (node:internal/modules/helpers:147:16)
-    at requirePage (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/require.js:109:84)
-    at /Users/harz/Downloads/aquafarm/node_modules/next/dist/server/load-components.js:98:84
-    at async loadComponentsImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/load-components.js:98:26)
-    at async DevServer.findPageComponentsImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/next-server.js:710:36)
-    at async DevServer.findPageComponents (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/dev/next-dev-server.js:577:20)
-    at async DevServer.renderPageComponent (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1917:24)
-    at async DevServer.renderToResponseImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1969:32)
-    at async DevServer.pipeImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:920:25)
-    at async NextNodeServer.handleCatchallRenderRequest (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/next-server.js:272:17)
-    at async DevServer.handleRequestImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:816:17)
-    at async /Users/harz/Downloads/aquafarm/node_modules/next/dist/server/dev/next-dev-server.js:339:20
-    at async Span.traceAsyncFn (/Users/harz/Downloads/aquafarm/node_modules/next/dist/trace/trace.js:154:20)
-    at async DevServer.handleRequest (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/dev/next-dev-server.js:336:24)
-    at async invokeRender (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/lib/router-server.js:174:21)
-    at async handleRequest (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/lib/router-server.js:353:24)
-    at async requestHandlerImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/lib/router-server.js:377:13)
-    at async Server.requestListener (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/lib/start-server.js:141:13) {
-  page: '/api/billing/checkout'
-}
-  79 |   });
-  80 | }
-> 81 |   const returnTo = body.returnTo === "billing" ? "billing" : "plans";
-     |                    ^
-  82 |
- ○ Compiling /_error ...
- ✓ Compiled /_error in 630ms (1170 modules)
- POST /api/billing/checkout 500 in 1196ms
- GET /settings/billing?_rsc=1kvxk 200 in 620ms
- GET /settings/billing?_rsc=1kvxk 200 in 16ms
+05:50:50.301 Running build in Washington, D.C., USA (East) – iad1
+05:50:50.301 Build machine configuration: 2 cores, 8 GB
+05:50:50.451 Cloning github.com/Harzkane/aquafarm (Branch: main, Commit: 6a2565e)
+05:50:50.755 Cloning completed: 304.000ms
+05:50:52.131 Restored build cache from previous deployment (ieGLCL6dc5hD7R85JhnELveV5oRj)
+05:50:53.365 Running "vercel build"
+05:50:53.968 Vercel CLI 50.28.0
+05:50:54.267 Installing dependencies...
+05:50:56.327 
+05:50:56.328 up to date in 2s
+05:50:56.328 
+05:50:56.329 156 packages are looking for funding
+05:50:56.329   run `npm fund` for details
+05:50:56.357 Detected Next.js version: 14.2.5
+05:50:56.362 Running "npm run build"
+05:50:56.458 
+05:50:56.458 > aquafarm@0.1.0 build
+05:50:56.459 > next build
+05:50:56.459 
+05:50:57.135   ▲ Next.js 14.2.5
+05:50:57.136 
+05:50:57.162    Creating an optimized production build ...
+05:51:12.784  ✓ Compiled successfully
+05:51:12.786    Linting and checking validity of types ...
+05:51:26.094 Failed to compile.
+05:51:26.094 
+05:51:26.094 ./app/(dashboard)/calendar/page.tsx:206:69
+05:51:26.094 Type error: This comparison appears to be unintentional because the types '"partial" | "active"' and '"harvested"' have no overlap.
+05:51:26.094 
+05:51:26.094 [0m [90m 204 |[39m         [36mconst[39m confirmation [33m=[39m eventsByKey[key][33m;[39m[0m
+05:51:26.094 [0m [90m 205 |[39m         [36mconst[39m doneByEvent [33m=[39m milestone[33m.[39mkind [33m===[39m [32m"sort"[39m [33m&&[39m [33mBoolean[39m(confirmation)[33m;[39m[0m
+05:51:26.095 [0m[31m[1m>[22m[39m[90m 206 |[39m         [36mconst[39m doneByHarvestStatus [33m=[39m milestone[33m.[39mkind [33m===[39m [32m"harvest"[39m [33m&&[39m batch[33m.[39mstatus [33m===[39m [32m"harvested"[39m[33m;[39m[0m
+05:51:26.095 [0m [90m     |[39m                                                                     [31m[1m^[22m[39m[0m
+05:51:26.095 [0m [90m 207 |[39m         [36mif[39m (doneByEvent [33m||[39m doneByHarvestStatus) [36mcontinue[39m[33m;[39m[0m
+05:51:26.095 [0m [90m 208 |[39m[0m
+05:51:26.095 [0m [90m 209 |[39m         [36mconst[39m dueDate [33m=[39m startOfDay(addWeeks(stockDate[33m,[39m milestone[33m.[39mweek))[33m;[39m[0m
+05:51:26.159 Error: Command "npm run build" exited with 1

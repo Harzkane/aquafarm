@@ -203,7 +203,7 @@ export default function CalendarPage() {
         const key = eventKey(batch._id, milestone.kind, milestone.week);
         const confirmation = eventsByKey[key];
         const doneByEvent = milestone.kind === "sort" && Boolean(confirmation);
-        const doneByHarvestStatus = milestone.kind === "harvest" && batch.status === "harvested";
+        const doneByHarvestStatus = milestone.kind === "harvest" && (batch.status as any) === "harvested";
         if (doneByEvent || doneByHarvestStatus) continue;
 
         const dueDate = startOfDay(addWeeks(stockDate, milestone.week));
@@ -278,9 +278,8 @@ export default function CalendarPage() {
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm text-pond-100 font-medium truncate">{item.batchName}</p>
                   <span
-                    className={`badge text-[10px] ${
-                      item.status === "overdue" ? "badge-red" : item.status === "dueSoon" ? "badge-amber" : "badge-water"
-                    }`}
+                    className={`badge text-[10px] ${item.status === "overdue" ? "badge-red" : item.status === "dueSoon" ? "badge-amber" : "badge-water"
+                      }`}
                   >
                     {item.status === "overdue" ? "Overdue" : item.status === "dueSoon" ? "Due soon" : "Upcoming"}
                   </span>
@@ -328,8 +327,8 @@ export default function CalendarPage() {
           const fallbackLiveAllocations =
             activeAllocations.length === 0 && activeBatchCount === 1
               ? tanks
-                  .filter((t) => Number(t.currentFish || 0) > 0)
-                  .map((t) => ({ tankId: t._id, tankName: t.name, fishCount: Number(t.currentFish || 0), phase: "inferred-live" }))
+                .filter((t) => Number(t.currentFish || 0) > 0)
+                .map((t) => ({ tankId: t._id, tankName: t.name, fishCount: Number(t.currentFish || 0), phase: "inferred-live" }))
               : [];
 
           const displayAllocations = activeAllocations.length > 0 ? activeAllocations : fallbackLiveAllocations;

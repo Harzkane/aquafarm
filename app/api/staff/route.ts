@@ -28,7 +28,7 @@ async function getCommercialOwnerFromSession() {
     return { error: "Staff access is not enabled for this plan.", status: 403 } as const;
   }
 
-  return { owner: actor, plan } as const;
+  return { owner: actor, plan, session } as const;
 }
 
 export async function GET() {
@@ -48,7 +48,7 @@ export async function GET() {
   return NextResponse.json({
     staff,
     limits: {
-      maxStaffUsers: ownerResult.plan.maxStaffUsers,
+      maxStaffUsers: ownerResult.plan?.maxStaffUsers || 0,
     },
     usage: {
       staffUsers: staff.length,
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
   if (!("owner" in ownerResult)) {
     return NextResponse.json({ error: ownerResult.error }, { status: ownerResult.status });
   }
-  const maxStaffUsers = ownerResult.plan.maxStaffUsers || 0;
+  const maxStaffUsers = ownerResult.plan?.maxStaffUsers || 0;
 
   let body: any = {};
   try {
@@ -111,13 +111,13 @@ export async function POST(req: NextRequest) {
   });
 
   await recordAuditEvent({
-    sessionUser: session.user,
+    sessionUser: ownerResult.session!.user,
     action: "create",
     resource: "staff_user",
     resourceId: created._id.toString(),
     summary: `Added staff user ${created.email}`,
     meta: { name: created.name, email: created.email },
-  }).catch(() => {});
+  }).catch(() => { });
 
   return NextResponse.json(
     {

@@ -22,7 +22,7 @@ async function getCommercialOwnerFromSession() {
     return { error: "Staff access is available on Commercial plan only.", status: 403 } as const;
   }
 
-  return { owner: actor } as const;
+  return { owner: actor, session } as const;
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
@@ -42,13 +42,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   });
   if (!deleted) return NextResponse.json({ error: "Staff user not found" }, { status: 404 });
   await recordAuditEvent({
-    sessionUser: session.user,
+    sessionUser: ownerResult.session!.user,
     action: "delete",
     resource: "staff_user",
     resourceId: deleted._id.toString(),
     summary: `Removed staff user ${deleted.email}`,
     meta: { name: deleted.name, email: deleted.email },
-  }).catch(() => {});
+  }).catch(() => { });
 
   return NextResponse.json({ ok: true });
 }
