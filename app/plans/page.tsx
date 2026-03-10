@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import {
@@ -65,7 +65,7 @@ function StatPill({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function PlansPage() {
+function PlansContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const checkoutFlag = searchParams.get("checkout");
@@ -247,13 +247,12 @@ export default function PlansPage() {
       <main className="relative mx-auto w-full max-w-[84rem] space-y-8 px-4 pb-14 pt-10 lg:space-y-10 lg:pt-14">
         {verifyState !== "idle" ? (
           <div
-            className={`rounded-xl border p-3 text-sm ${
-              verifyState === "success"
+            className={`rounded-xl border p-3 text-sm ${verifyState === "success"
                 ? "border-emerald-400/35 bg-emerald-500/10 text-emerald-200"
                 : verifyState === "loading"
                   ? "border-blue-400/35 bg-blue-500/10 text-blue-100"
                   : "border-red-400/35 bg-red-500/10 text-red-200"
-            }`}
+              }`}
           >
             {verifyState === "loading" ? <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> : null}
             {verifyMessage}
@@ -504,7 +503,7 @@ export default function PlansPage() {
           <p className="mx-auto mt-2 max-w-2xl text-sm text-[#aab8c7]">
             Join early, lock in founder pricing, and run your next cycle with tighter operational control.
           </p>
-            <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
+          <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
             {isAuthenticated ? (
               <Link href="/dashboard" className="btn-primary">
                 Open dashboard
@@ -565,5 +564,17 @@ export default function PlansPage() {
         ) : null}
       </main>
     </div>
+  );
+}
+
+export default function PlansPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0b0f13] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-white/50" />
+      </div>
+    }>
+      <PlansContent />
+    </Suspense>
   );
 }
