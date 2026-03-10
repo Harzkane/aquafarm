@@ -8,84 +8,8 @@ import { User } from "@/models/User";
 import { getPlanConfig } from "@/lib/plans";
 import { Types } from "mongoose";
 import { recordAuditEvent } from "@/lib/audit";
-
-type LogPayload = {
-  batchId: string;
-  date?: string;
-  feedSession?: "morning" | "evening";
-  tankId?: string;
-  tankName?: string;
-  feedGiven?: number;
-  feedType?: string;
-  mortality?: number;
-  mortalityCause?: string;
-  fishCount?: number;
-  avgWeight?: number;
-  ph?: number | null;
-  ammonia?: number | null;
-  temperature?: number | null;
-  dissolvedO2?: number | null;
-  waterChanged?: boolean;
-  waterChangePct?: number;
-  observations?: string;
-};
-
-function normalizeOptionalNumber(value: unknown): number | undefined {
-  if (value === null || value === undefined || value === "") return undefined;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : undefined;
-}
-
-function validateLogPayload(body: any): { ok: true; value: LogPayload } | { ok: false; error: string } {
-  const batchId = typeof body?.batchId === "string" ? body.batchId.trim() : "";
-  if (!batchId || !Types.ObjectId.isValid(batchId)) return { ok: false, error: "Valid batch is required" };
-
-  const feedGiven = normalizeOptionalNumber(body?.feedGiven) ?? 0;
-  const feedSession = body?.feedSession === "evening" ? "evening" : "morning";
-  const mortality = Math.trunc(normalizeOptionalNumber(body?.mortality) ?? 0);
-  const ph = normalizeOptionalNumber(body?.ph);
-  const ammonia = normalizeOptionalNumber(body?.ammonia);
-  const temperature = normalizeOptionalNumber(body?.temperature);
-  const waterChangePct = Math.trunc(normalizeOptionalNumber(body?.waterChangePct) ?? 0);
-  const fishCount = normalizeOptionalNumber(body?.fishCount);
-  const avgWeight = normalizeOptionalNumber(body?.avgWeight);
-  const dissolvedO2 = normalizeOptionalNumber(body?.dissolvedO2);
-  const waterChanged = Boolean(body?.waterChanged);
-  const date = body?.date ? new Date(body.date) : new Date();
-
-  if (Number.isNaN(date.getTime())) return { ok: false, error: "Invalid log date" };
-  if (feedGiven < 0) return { ok: false, error: "Feed given cannot be negative" };
-  if (mortality < 0) return { ok: false, error: "Mortality cannot be negative" };
-  if (ph !== undefined && (ph < 0 || ph > 14)) return { ok: false, error: "pH must be between 0 and 14" };
-  if (ammonia !== undefined && ammonia < 0) return { ok: false, error: "Ammonia cannot be negative" };
-  if (temperature !== undefined && (temperature < -10 || temperature > 60)) return { ok: false, error: "Temperature is out of valid range" };
-  if (waterChangePct < 0 || waterChangePct > 100) return { ok: false, error: "Water change % must be between 0 and 100" };
-  if (waterChanged && waterChangePct <= 0) return { ok: false, error: "Enter water change % when water was changed" };
-
-  return {
-    ok: true,
-    value: {
-      batchId,
-      date: date.toISOString(),
-      feedSession,
-      tankId: typeof body?.tankId === "string" ? body.tankId.trim() : "",
-      tankName: typeof body?.tankName === "string" ? body.tankName.trim() : "",
-      feedGiven,
-      feedType: typeof body?.feedType === "string" ? body.feedType.trim() : "",
-      mortality,
-      mortalityCause: typeof body?.mortalityCause === "string" ? body.mortalityCause.trim() : "",
-      fishCount,
-      avgWeight,
-      ph,
-      ammonia,
-      temperature,
-      dissolvedO2,
-      waterChanged,
-      waterChangePct: waterChanged ? waterChangePct : 0,
-      observations: typeof body?.observations === "string" ? body.observations.trim() : "",
-    },
-  };
-}
+import { runAtomic } from "@/lib/transactions";
+import { validateLogPayload } from "@/lib/validators/logs";
 
 function dayRange(date: Date) {
   const start = new Date(date);
@@ -95,17 +19,22 @@ function dayRange(date: Date) {
   return { start, end };
 }
 
-async function applyMortalityDelta(batchId: string, userId: string, deltaMortality: number) {
+async function applyMortalityDelta(
+  batchId: string,
+  userId: string,
+  deltaMortality: number,
+  txSession: any = null
+) {
   if (!deltaMortality) return;
   const batch = await Batch.findOne({
     _id: batchId,
     userId,
     $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
-  });
+  }).session(txSession || null);
   if (!batch) return;
   const updatedCount = Math.max(0, (batch.currentCount || 0) - deltaMortality);
   batch.currentCount = updatedCount;
-  await batch.save();
+  await batch.save({ session: txSession || undefined });
 }
 
 export async function GET(req: NextRequest) {
@@ -161,29 +90,36 @@ export async function POST(req: NextRequest) {
     feedSession === "morning"
       ? [{ feedSession: "morning" }, { feedSession: { $exists: false } }, { feedSession: null }]
       : [{ feedSession: "evening" }];
-  const existing = await DailyLog.findOne({
-    userId,
-    batchId: payload.batchId,
-    date: { $gte: start, $lte: end },
-    $or: slotMatcher,
-  });
+  const { log, auditAction } = await runAtomic(async (txSession) => {
+    const existing = await DailyLog.findOne({
+      userId,
+      batchId: payload.batchId,
+      date: { $gte: start, $lte: end },
+      $or: slotMatcher,
+    }).session(txSession || null);
 
-  let log;
-  let auditAction: "create" | "update" = "create";
-  if (existing) {
-    const previousMortality = Number(existing.mortality || 0);
-    const nextMortality = Number(payload.mortality || 0);
-    const deltaMortality = nextMortality - previousMortality;
-    Object.assign(existing, payload);
-    existing.date = logDate;
-    await existing.save();
-    await applyMortalityDelta(payload.batchId, userId, deltaMortality);
-    log = existing;
-    auditAction = "update";
-  } else {
-    log = await DailyLog.create({ ...payload, userId, date: logDate });
-    await applyMortalityDelta(payload.batchId, userId, Number(payload.mortality || 0));
-  }
+    let logDoc;
+    let action: "create" | "update" = "create";
+    if (existing) {
+      const previousMortality = Number(existing.mortality || 0);
+      const nextMortality = Number(payload.mortality || 0);
+      const deltaMortality = nextMortality - previousMortality;
+      Object.assign(existing, payload);
+      existing.date = logDate;
+      await existing.save({ session: txSession || undefined });
+      await applyMortalityDelta(payload.batchId, userId, deltaMortality, txSession);
+      logDoc = existing;
+      action = "update";
+    } else {
+      const created = await DailyLog.create([{ ...payload, userId, date: logDate }], {
+        session: txSession || undefined,
+      });
+      logDoc = created[0];
+      await applyMortalityDelta(payload.batchId, userId, Number(payload.mortality || 0), txSession);
+    }
+
+    return { log: logDoc, auditAction: action };
+  });
 
   await recordAuditEvent({
     sessionUser: session.user,

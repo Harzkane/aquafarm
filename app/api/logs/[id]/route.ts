@@ -6,6 +6,7 @@ import { DailyLog } from "@/models/DailyLog";
 import { Batch } from "@/models/Batch";
 import { Types } from "mongoose";
 import { recordAuditEvent } from "@/lib/audit";
+import { runAtomic } from "@/lib/transactions";
 
 type LogPatchBody = {
   batchId?: string;
@@ -114,16 +115,21 @@ function validatePatchBody(body: LogPatchBody): { ok: true; value: Record<string
   return { ok: true, value: update };
 }
 
-async function applyMortalityDelta(batchId: string, userId: string, deltaMortality: number) {
+async function applyMortalityDelta(
+  batchId: string,
+  userId: string,
+  deltaMortality: number,
+  txSession: any = null
+) {
   if (!deltaMortality) return;
   const batch = await Batch.findOne({
     _id: batchId,
     userId,
     $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
-  });
+  }).session(txSession || null);
   if (!batch) return;
   batch.currentCount = Math.max(0, (batch.currentCount || 0) - deltaMortality);
-  await batch.save();
+  await batch.save({ session: txSession || undefined });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -137,53 +143,64 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   await connectDB();
   const userId = (session.user as any).id;
-  const existing = await DailyLog.findOne({ _id: params.id, userId });
-  if (!existing) return NextResponse.json({ error: "Log not found" }, { status: 404 });
-
   const update = validated.value;
-  const oldBatchId = String(existing.batchId);
-  const newBatchId = update.batchId ? String(update.batchId) : oldBatchId;
-  const oldMortality = Number(existing.mortality || 0);
-  const newMortality = update.mortality !== undefined ? Number(update.mortality || 0) : oldMortality;
+  const updatedLog = await runAtomic(async (txSession) => {
+    const existing = await DailyLog.findOne({ _id: params.id, userId }).session(txSession || null);
+    if (!existing) return null;
 
-  if (newBatchId !== oldBatchId) {
-    const targetBatch = await Batch.findOne({
-      _id: newBatchId,
-      userId,
-      $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
-    });
-    if (!targetBatch) return NextResponse.json({ error: "Target batch not found" }, { status: 404 });
+    const oldBatchId = String(existing.batchId);
+    const newBatchId = update.batchId ? String(update.batchId) : oldBatchId;
+    const oldMortality = Number(existing.mortality || 0);
+    const newMortality = update.mortality !== undefined ? Number(update.mortality || 0) : oldMortality;
+
+    if (newBatchId !== oldBatchId) {
+      const targetBatch = await Batch.findOne({
+        _id: newBatchId,
+        userId,
+        $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
+      }).session(txSession || null);
+      if (!targetBatch) throw new Error("TARGET_BATCH_NOT_FOUND");
+    }
+
+    Object.assign(existing, update);
+    await existing.save({ session: txSession || undefined });
+
+    if (newBatchId === oldBatchId) {
+      await applyMortalityDelta(oldBatchId, userId, newMortality - oldMortality, txSession);
+    } else {
+      await applyMortalityDelta(oldBatchId, userId, -oldMortality, txSession);
+      await applyMortalityDelta(newBatchId, userId, newMortality, txSession);
+    }
+    return existing;
+  }).catch((error: any) => {
+    if (String(error?.message || "") === "TARGET_BATCH_NOT_FOUND") return "TARGET_BATCH_NOT_FOUND" as const;
+    throw error;
+  });
+
+  if (updatedLog === null) return NextResponse.json({ error: "Log not found" }, { status: 404 });
+  if (updatedLog === "TARGET_BATCH_NOT_FOUND") {
+    return NextResponse.json({ error: "Target batch not found" }, { status: 404 });
   }
 
-  Object.assign(existing, update);
-  await existing.save();
-
-  if (newBatchId === oldBatchId) {
-    await applyMortalityDelta(oldBatchId, userId, newMortality - oldMortality);
-  } else {
-    await applyMortalityDelta(oldBatchId, userId, -oldMortality);
-    await applyMortalityDelta(newBatchId, userId, newMortality);
-  }
-
-  const batch = await Batch.findById(existing.batchId).select("name").lean<any>();
+  const batch = await Batch.findById(updatedLog.batchId).select("name").lean<any>();
   await recordAuditEvent({
     sessionUser: session.user,
     action: "update",
     resource: "daily_log",
-    resourceId: existing._id.toString(),
+    resourceId: updatedLog._id.toString(),
     summary: `Updated daily log for ${batch?.name || "batch"}`,
     meta: {
-      batchId: String(existing.batchId || ""),
+      batchId: String(updatedLog.batchId || ""),
       batchName: batch?.name || "",
-      feedSession: existing.feedSession || "morning",
-      feedGiven: Number(existing.feedGiven || 0),
-      mortality: Number(existing.mortality || 0),
-      date: existing.date ? new Date(existing.date).toISOString() : null,
+      feedSession: updatedLog.feedSession || "morning",
+      feedGiven: Number(updatedLog.feedGiven || 0),
+      mortality: Number(updatedLog.mortality || 0),
+      date: updatedLog.date ? new Date(updatedLog.date).toISOString() : null,
       fields: Object.keys(update),
     },
   }).catch(() => {});
 
-  return NextResponse.json(existing);
+  return NextResponse.json(updatedLog);
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
@@ -193,14 +210,18 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 
   await connectDB();
   const userId = (session.user as any).id;
-  const existing = await DailyLog.findOne({ _id: params.id, userId });
-  if (!existing) return NextResponse.json({ error: "Log not found" }, { status: 404 });
+  const deletedLog = await runAtomic(async (txSession) => {
+    const existing = await DailyLog.findOne({ _id: params.id, userId }).session(txSession || null);
+    if (!existing) return null;
+    const batchId = String(existing.batchId);
+    const mortality = Number(existing.mortality || 0);
+    await existing.deleteOne({ session: txSession || undefined });
+    await applyMortalityDelta(batchId, userId, -mortality, txSession);
+    return { existing, batchId, mortality };
+  });
+  if (!deletedLog) return NextResponse.json({ error: "Log not found" }, { status: 404 });
 
-  const batchId = String(existing.batchId);
-  const mortality = Number(existing.mortality || 0);
-  const batch = await Batch.findById(existing.batchId).select("name").lean<any>();
-  await existing.deleteOne();
-  await applyMortalityDelta(batchId, userId, -mortality);
+  const batch = await Batch.findById(deletedLog.batchId).select("name").lean<any>();
 
   await recordAuditEvent({
     sessionUser: session.user,
@@ -209,12 +230,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     resourceId: params.id,
     summary: `Deleted daily log for ${batch?.name || "batch"}`,
     meta: {
-      batchId,
+      batchId: deletedLog.batchId,
       batchName: batch?.name || "",
-      feedSession: existing.feedSession || "morning",
-      feedGiven: Number(existing.feedGiven || 0),
-      mortality,
-      date: existing.date ? new Date(existing.date).toISOString() : null,
+      feedSession: deletedLog.existing.feedSession || "morning",
+      feedGiven: Number(deletedLog.existing.feedGiven || 0),
+      mortality: deletedLog.mortality,
+      date: deletedLog.existing.date ? new Date(deletedLog.existing.date).toISOString() : null,
     },
   }).catch(() => {});
 

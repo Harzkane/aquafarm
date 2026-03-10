@@ -1,0 +1,13 @@
+{
+  "crons": [
+    {
+      "path": "/api/internal/cron/billing-reconcile?limit=120",
+      "schedule": "7 * * * *"
+    },
+    {
+      "path": "/api/internal/cron/billing-events-prune?keepDays=180&batchSize=500",
+      "schedule": "17 2 * * *"
+    }
+  ]
+}
+

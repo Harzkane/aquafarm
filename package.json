@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:phase2": "rm -rf .tmp-tests && tsc -p tsconfig.tests.json && node --test .tmp-tests/tests/phase2/*.test.js"
   },
   "dependencies": {
     "next": "14.2.5",

@@ -1,156 +1,160 @@
-# 🐟 AquaFarm — Catfish Farm Management App
+# AquaFarm
 
-A beautiful, mobile-first farm management app built for Nigerian catfish farmers. 
-Tracks batches, feeding, mortality, water quality, and profits — all in one place.
+AquaFarm is a production-ready aquafarm management and planning SaaS platform built with Next.js and MongoDB.
 
----
+It combines farm operations, planning workflows, financial visibility, and SaaS controls in one workspace.
+
+## Current Product Status
+- Platform stage: Production-capable SaaS (Phase-2 hardening implemented)
+- Core domain coverage: Operations + planning + billing + team controls + ops visibility
+- Runtime: Vercel (with scheduled cron jobs)
+
+## Core Capabilities
+- Farm operations:
+  - Batches, tanks, daily logs, mortality, water quality, feed inventory, harvest
+- Planning:
+  - Calendar milestones and playbook/SOP guidance
+- Commercials:
+  - Financial tracking, report summaries, CSV export
+- SaaS controls:
+  - Plan tiers (`free`, `pro`, `commercial`)
+  - Paystack billing flows (checkout, verify, webhook, cancel)
+  - Billing reconciliation controls
+  - Commercial staff management and operational audit logs
+- Operations and reliability:
+  - Distributed middleware rate limiting (Upstash REST with local fallback)
+  - Protected internal cron jobs for billing reconcile and retention prune
+  - Cron run logging and owner-facing Ops Monitor (`/settings/ops`)
+
+## Plan Tiers (Implemented)
+- `free`
+  - Max active batches: `1`
+  - Max tanks: `4`
+  - Report history: `30 days`
+  - No staff seats
+- `pro` (Pro Founder)
+  - Max active batches: `5`
+  - Unlimited tanks
+  - Full report history
+  - No staff seats
+- `commercial` (Pro+ Commercial)
+  - Unlimited active batches
+  - Unlimited tanks
+  - Staff seats: `5`
+  - Commercial owner-only ops surfaces (`staff`, `audit`, `ops`)
 
 ## Tech Stack
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js 14 (App Router), React 18 |
+| Styling | Tailwind CSS |
+| Backend | Next.js Route Handlers |
+| Database | MongoDB (Mongoose) |
+| Auth | NextAuth Credentials + JWT session |
+| Billing | Paystack |
+| Runtime Ops | Vercel Cron + Upstash Redis REST |
 
-| Layer     | Technology                        |
-|-----------|-----------------------------------|
-| Frontend  | Next.js 14 (App Router)           |
-| Styling   | Tailwind CSS + Custom Design System |
-| Charts    | Recharts                          |
-| Backend   | Next.js API Routes (no separate server) |
-| Database  | MongoDB Atlas                     |
-| Auth      | NextAuth.js (JWT)                 |
-| Deploy    | Vercel (recommended)              |
+## Quick Start (Local)
 
----
-
-## 🚀 Quick Setup
-
-### 1. Install dependencies
+### 1) Install dependencies
 ```bash
 npm install
 ```
 
-### 2. Set up MongoDB Atlas (FREE)
-1. Go to https://cloud.mongodb.com
-2. Create a free account
-3. Create a new cluster (M0 free tier)
-4. Create a database user (username + password)
-5. Whitelist your IP (or 0.0.0.0/0 for all)
-6. Get your connection string (looks like: `mongodb+srv://user:pass@cluster.mongodb.net/`)
-
-### 3. Configure environment variables
+### 2) Configure environment
 ```bash
 cp .env.local.example .env.local
 ```
 
-Edit `.env.local`:
+Minimum required for local app usage:
 ```env
-MONGODB_URI=mongodb+srv://YOUR_USER:YOUR_PASS@cluster0.xxxxx.mongodb.net/aquafarm?retryWrites=true&w=majority
-NEXTAUTH_SECRET=any-long-random-string-here  # generate with: openssl rand -base64 32
+MONGODB_URI=...
+NEXTAUTH_SECRET=...
 NEXTAUTH_URL=http://localhost:3000
 ```
 
-### 4. Run development server
+Optional but required for full SaaS behavior:
+- Billing: `PAYSTACK_*`
+- Distributed rate limiting: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`
+- Internal cron auth: `CRON_SECRET`
+
+### 3) Run the app
 ```bash
 npm run dev
 ```
 
-Open http://localhost:3000 — you'll be redirected to /login
+Open `http://localhost:3000`.
 
-### 5. Create your account
-- Click "Register"
-- Enter your name, farm name, email, password
-- You're in!
-
----
-
-## 📱 Features
-
-| Page          | What it does                                         |
-|---------------|------------------------------------------------------|
-| Dashboard     | KPI overview, charts, batch progress, P&L summary    |
-| Batches       | Create & track production batches with week timeline  |
-| Daily Log     | Quick-entry feeding, water quality, mortality logger  |
-| Mortality     | Dedicated mortality tracker with cause analysis       |
-| Financials    | Expense tracker, revenue logger, profit calculator   |
-| Tanks         | Tank setup with water level guidance                 |
-| Calendar      | Week-by-week timeline with sorting reminders         |
-
----
-
-## 🌐 Deploy to Vercel (FREE)
-
-### Option A: Via Vercel CLI
+## Quality Commands
+- Lint:
 ```bash
-npm install -g vercel
-vercel
+npm run lint
+```
+- Phase-2 logic tests:
+```bash
+npm run test:phase2
 ```
 
-### Option B: Via GitHub
-1. Push this repo to GitHub
-2. Go to https://vercel.com
-3. Import your GitHub repo
-4. Add environment variables in Vercel dashboard:
-   - `MONGODB_URI`
-   - `NEXTAUTH_SECRET`
-   - `NEXTAUTH_URL` (set to your Vercel URL e.g. https://aquafarm.vercel.app)
-5. Deploy!
+## Deploy (Vercel)
 
----
+### Required production env vars
+- Core:
+  - `MONGODB_URI`
+  - `NEXTAUTH_SECRET`
+  - `NEXTAUTH_URL`
+- Billing:
+  - `PAYSTACK_SECRET_KEY`
+  - `PAYSTACK_WEBHOOK_SECRET`
+  - `PAYSTACK_PRO_AMOUNT_KOBO`
+  - `PAYSTACK_COMMERCIAL_AMOUNT_KOBO`
+- Rate limiting:
+  - `UPSTASH_REDIS_REST_URL`
+  - `UPSTASH_REDIS_REST_TOKEN`
+- Internal cron security:
+  - `CRON_SECRET`
 
-## 🏗️ Project Structure
+### Cron jobs
+`vercel.json` defines:
+- Hourly billing reconcile:
+  - `/api/internal/cron/billing-reconcile?limit=120`
+- Daily billing-event prune:
+  - `/api/internal/cron/billing-events-prune?keepDays=180&batchSize=500`
 
-```
+## Project Structure
+```bash
 aquafarm/
 ├── app/
-│   ├── (auth)/login/         → Login & register page
-│   ├── (dashboard)/
-│   │   ├── dashboard/        → Main KPI dashboard
-│   │   ├── batches/          → Batch management
-│   │   ├── feeding/          → Daily log entry
-│   │   ├── mortality/        → Mortality tracker
-│   │   ├── financials/       → Cost & profit
-│   │   ├── tanks/            → Tank setup
-│   │   └── calendar/         → Production calendar
+│   ├── (auth)/login/
+│   ├── (dashboard)/...
 │   └── api/
-│       ├── auth/             → NextAuth + register
-│       ├── batches/          → Batch CRUD
-│       ├── logs/             → Daily log CRUD
-│       ├── tanks/            → Tank CRUD
-│       └── financials/       → Financial tracking
+│       ├── auth/
+│       ├── billing/
+│       ├── batches/
+│       ├── logs/
+│       ├── water-quality/
+│       ├── tanks/
+│       ├── harvest/
+│       ├── financials/
+│       ├── feed-inventory/
+│       ├── calendar/events/
+│       ├── reports/
+│       ├── staff/
+│       ├── audit/
+│       ├── ops/
+│       └── internal/cron/
 ├── components/
-│   ├── layout/Sidebar.tsx    → Nav sidebar (desktop + mobile)
-│   └── Providers.tsx         → Session provider
 ├── lib/
-│   ├── db.ts                 → MongoDB connection
-│   ├── auth.ts               → NextAuth config
-│   └── utils.ts              → Helper functions
-├── models/                   → Mongoose schemas
-│   ├── User.ts
-│   ├── Batch.ts
-│   ├── DailyLog.ts
-│   ├── Tank.ts
-│   └── Financial.ts
-└── app/globals.css           → Design system & custom styles
+├── models/
+├── tests/phase2/
+├── vercel.json
+└── app/globals.css
 ```
 
----
-
-## 💡 SaaS Upgrade Path (Future)
-
-When you're ready to sell this to other farmers:
-
-1. **Multi-tenancy** — Already built in (userId on every document)
-2. **Subscription plans** — Add Stripe/Paystack integration
-3. **Plan gating** — Use `user.plan` field (free/pro already in schema)
-4. **Admin dashboard** — Add `/admin` route for managing farmers
-5. **SMS alerts** — Add Termii/Africa's Talking for sort reminders
-6. **Offline support** — Add PWA manifest for offline mobile use
-
----
-
-## 📞 Your Farm Setup
-
-Pre-configured for:
-- **Location:** Abuja, Nigeria
-- **Initial batch:** 550 juveniles (500 paid + 20 bonus)
-- **Cost:** ₦35,000 (₦70/fish)
-- **4 tanks:** Tarpaulin + 3 half-cut water tanks
-- **Cycle:** ~16–18 weeks (starting from juveniles)
-- **Target:** December harvest for Christmas price premium (+30–50%)
+## Documentation Index
+- `PRODUCT.md` — Product scope and module map
+- `ARCHITECTURE.md` — System architecture and flow design
+- `API.md` — API route reference
+- `OPERATIONS.md` — Runbooks, cron ops, and maintenance
+- `SECURITY.md` — Authz, rate limiting, and secrets handling
+- `CONTRIBUTING.md` — Local setup and contribution workflow
+- `PHASE2_RELEASE_CHECKLIST.md` — Production rollout checklist

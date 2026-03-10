@@ -38,5 +38,6 @@ const UserSchema = new Schema({
 });
 
 UserSchema.index({ farmOwnerId: 1, role: 1 });
+UserSchema.index({ role: 1, cancelAtPeriodEnd: 1, billingExpiresAt: 1, billingStatus: 1, plan: 1, scheduledPlan: 1 });
 
 export const User = models.User || model("User", UserSchema);

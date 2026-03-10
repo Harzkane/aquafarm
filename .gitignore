@@ -16,6 +16,7 @@ yarn-error.log*
 
 # build artifacts
 *.tsbuildinfo
+.tmp-tests/
 
 # OS/editor
 .DS_Store

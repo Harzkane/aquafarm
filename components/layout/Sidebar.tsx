@@ -7,8 +7,10 @@ import {
   TrendingUp, Waves, Calendar, LogOut, Menu, X, Droplets, TestTube2, ShoppingBasket, Wheat, FileBarChart2, BookOpen, CircleDollarSign, CreditCard, Lock,
   Users,
   ShieldCheck,
+  ActivitySquare,
+  AlertTriangle,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -25,6 +27,7 @@ const NAV = [
   { href: "/settings/billing", icon: CreditCard,  label: "Billing"         },
   { href: "/settings/staff", icon: Users, label: "Staff Access"            },
   { href: "/settings/audit", icon: ShieldCheck, label: "Operations Audit"  },
+  { href: "/settings/ops", icon: ActivitySquare, label: "Ops Monitor"      },
   { href: "/playbook",    icon: BookOpen,         label: "Playbook"        },
   { href: "/tanks",       icon: Waves,            label: "Tanks"           },
   { href: "/calendar",    icon: Calendar,         label: "Calendar"        },
@@ -41,8 +44,29 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [opsFailedRuns, setOpsFailedRuns] = useState(0);
   const currentPlan = ((session?.user as any)?.plan || "free") as "free" | "pro" | "commercial";
   const currentRole = ((session?.user as any)?.role || "owner") as "owner" | "staff";
+  const canSeeOps = currentPlan === "commercial" && currentRole === "owner";
+
+  useEffect(() => {
+    if (!canSeeOps) return;
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/ops/cron-health?hours=24", { cache: "no-store" });
+        if (!res.ok) return;
+        const payload = await res.json();
+        if (!active) return;
+        setOpsFailedRuns(Number(payload?.failedRuns || 0));
+      } catch {
+        // ignore sidebar telemetry failures
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [canSeeOps]);
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
@@ -56,6 +80,12 @@ export default function Sidebar() {
           <div>
             <p className="font-display font-semibold text-pond-200 text-sm leading-tight">AquaFarm</p>
             <p className="text-xs text-pond-400/70 leading-tight">{(session?.user as any)?.farmName || "My Farm"}</p>
+            {canSeeOps && opsFailedRuns > 0 ? (
+              <p className="mt-1 inline-flex items-center gap-1 rounded-full border border-red-400/35 bg-red-500/10 px-2 py-0.5 text-[10px] text-red-200">
+                <AlertTriangle className="w-3 h-3" />
+                {opsFailedRuns} cron failure{opsFailedRuns > 1 ? "s" : ""} (24h)
+              </p>
+            ) : null}
           </div>
         </div>
       </div>
@@ -66,6 +96,7 @@ export default function Sidebar() {
           if (href === "/settings/billing" && currentRole === "staff") return null;
           if (href === "/settings/staff" && !(currentPlan === "commercial" && currentRole === "owner")) return null;
           if (href === "/settings/audit" && !(currentPlan === "commercial" && currentRole === "owner")) return null;
+          if (href === "/settings/ops" && !(currentPlan === "commercial" && currentRole === "owner")) return null;
           const locked = currentPlan === "free" && FREE_LOCKED.has(href);
           const targetHref = locked ? "/plans" : href;
           return (

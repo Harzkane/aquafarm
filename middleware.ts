@@ -7,6 +7,7 @@ type RateState = {
 };
 
 const rateBuckets = new Map<string, RateState>();
+const REDIS_KEY_PREFIX = "aquafarm:rl";
 
 function getClientIp(req: NextRequest) {
   const forwarded = req.headers.get("x-forwarded-for");
@@ -14,7 +15,7 @@ function getClientIp(req: NextRequest) {
   return req.headers.get("x-real-ip") || "unknown";
 }
 
-function consumeRateLimit(key: string, limit: number, windowMs: number) {
+function consumeLocalRateLimit(key: string, limit: number, windowMs: number) {
   const now = Date.now();
   const existing = rateBuckets.get(key);
 
@@ -33,6 +34,53 @@ function consumeRateLimit(key: string, limit: number, windowMs: number) {
   return { allowed: true, remaining: Math.max(0, limit - existing.count), resetAt: existing.resetAt };
 }
 
+async function consumeUpstashRateLimit(key: string, limit: number, windowMs: number) {
+  const restUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const restToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!restUrl || !restToken) return null;
+
+  const windowSeconds = Math.max(1, Math.ceil(windowMs / 1000));
+  const redisKey = `${REDIS_KEY_PREFIX}:${key}`;
+
+  try {
+    const response = await fetch(`${restUrl}/pipeline`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${restToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify([
+        ["INCR", redisKey],
+        ["EXPIRE", redisKey, windowSeconds, "NX"],
+        ["TTL", redisKey],
+      ]),
+      cache: "no-store",
+    });
+
+    if (!response.ok) return null;
+    const payload = await response.json();
+    if (!Array.isArray(payload) || payload.length < 3) return null;
+
+    const count = Number(payload?.[0]?.result);
+    const ttlSecondsRaw = Number(payload?.[2]?.result);
+    if (!Number.isFinite(count)) return null;
+
+    const ttlSeconds = Number.isFinite(ttlSecondsRaw) && ttlSecondsRaw >= 0 ? ttlSecondsRaw : windowSeconds;
+    const resetAt = Date.now() + ttlSeconds * 1000;
+    const allowed = count <= limit;
+    const remaining = Math.max(0, limit - count);
+    return { allowed, remaining, resetAt };
+  } catch {
+    return null;
+  }
+}
+
+async function consumeRateLimit(key: string, limit: number, windowMs: number) {
+  const distributed = await consumeUpstashRateLimit(key, limit, windowMs);
+  if (distributed) return distributed;
+  return consumeLocalRateLimit(key, limit, windowMs);
+}
+
 function withSecurityHeaders(res: NextResponse) {
   res.headers.set("X-Frame-Options", "DENY");
   res.headers.set("X-Content-Type-Options", "nosniff");
@@ -45,8 +93,8 @@ function withSecurityHeaders(res: NextResponse) {
 
 const FREE_LOCKED_PAGE_PREFIXES = ["/financials", "/harvest", "/playbook", "/calendar"];
 const FREE_LOCKED_API_PREFIXES = ["/api/financials", "/api/harvest", "/api/calendar/events"];
-const COMMERCIAL_OWNER_PAGE_PREFIXES = ["/settings/staff", "/settings/audit"];
-const COMMERCIAL_OWNER_API_PREFIXES = ["/api/staff", "/api/audit"];
+const COMMERCIAL_OWNER_PAGE_PREFIXES = ["/settings/staff", "/settings/audit", "/settings/ops"];
+const COMMERCIAL_OWNER_API_PREFIXES = ["/api/staff", "/api/audit", "/api/ops"];
 const STAFF_BLOCKED_PAGE_PREFIXES = ["/settings/billing"];
 
 function isLockedForFree(pathname: string) {
@@ -79,7 +127,7 @@ export async function middleware(req: NextRequest) {
     const limit = bucket === "auth" ? 10 : 180;
     const windowMs = bucket === "auth" ? 10 * 60 * 1000 : 60 * 1000;
     const key = `${bucket}:${ip}:${pathname}`;
-    const result = consumeRateLimit(key, limit, windowMs);
+    const result = await consumeRateLimit(key, limit, windowMs);
     const retryAfterSeconds = Math.max(1, Math.ceil((result.resetAt - Date.now()) / 1000));
 
     if (!result.allowed) {
