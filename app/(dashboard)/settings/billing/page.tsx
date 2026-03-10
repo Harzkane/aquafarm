@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Loader2, CircleDollarSign } from "lucide-react";
@@ -44,7 +44,7 @@ type BillingStatusPayload = {
   successProgram?: SuccessProgramPayload;
 };
 
-export default function BillingSettingsPage() {
+function BillingContent() {
   const searchParams = useSearchParams();
   const upgradedNow = searchParams.get("upgraded") === "1";
   const canceledNow = searchParams.get("canceled") === "1";
@@ -548,5 +548,17 @@ export default function BillingSettingsPage() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+export default function BillingSettingsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-pond-300" />
+      </div>
+    }>
+      <BillingContent />
+    </Suspense>
   );
 }
