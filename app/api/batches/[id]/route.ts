@@ -4,6 +4,9 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Batch } from "@/models/Batch";
 import { Types } from "mongoose";
+import { User } from "@/models/User";
+import { getPlanConfig } from "@/lib/plans";
+import { recordAuditEvent } from "@/lib/audit";
 
 type UpdateBody = {
   name?: string;
@@ -120,6 +123,27 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   if (update.status === "active") {
+    const user = await User.findById(userId).select("plan").lean<any>();
+    const plan = getPlanConfig(user?.plan);
+    if (plan.maxActiveBatches !== null) {
+      const activeCount = await Batch.countDocuments({
+        userId,
+        status: "active",
+        _id: { $ne: existing._id },
+        $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
+      });
+      if (activeCount >= plan.maxActiveBatches) {
+        return NextResponse.json(
+          {
+            error: `Your ${plan.label} plan allows up to ${plan.maxActiveBatches} active batch${plan.maxActiveBatches > 1 ? "es" : ""}. Upgrade to add more.`,
+            code: "PLAN_LIMIT_ACTIVE_BATCHES",
+            limit: plan.maxActiveBatches,
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     // Reopen clears harvested metadata to avoid stale values.
     update.harvestDate = null;
     update.harvestedWeightKg = null;
@@ -136,6 +160,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     { $set: update },
     { new: true }
   );
+
+  if (updated) {
+    await recordAuditEvent({
+      sessionUser: session.user,
+      action: "update",
+      resource: "batch",
+      resourceId: updated._id.toString(),
+      summary: `Updated batch ${updated.name}`,
+      meta: { fields: Object.keys(update) },
+    }).catch(() => {});
+  }
 
   return NextResponse.json(updated);
 }
@@ -160,5 +195,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   );
 
   if (!deleted) return NextResponse.json({ error: "Batch not found" }, { status: 404 });
+  await recordAuditEvent({
+    sessionUser: session.user,
+    action: "delete",
+    resource: "batch",
+    resourceId: deleted._id.toString(),
+    summary: `Deleted batch ${deleted.name}`,
+  }).catch(() => {});
   return NextResponse.json({ success: true });
 }

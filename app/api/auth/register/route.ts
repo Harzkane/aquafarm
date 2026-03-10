@@ -14,7 +14,17 @@ export async function POST(req: NextRequest) {
     if (existing) return NextResponse.json({ error: "Email already registered" }, { status: 409 });
 
     const hashed = await bcrypt.hash(password, 12);
-    await User.create({ name, email: email.toLowerCase(), password: hashed, farmName: farmName || "My Catfish Farm" });
+    await User.create({
+      name,
+      email: email.toLowerCase(),
+      password: hashed,
+      farmName: farmName || "My Catfish Farm",
+      role: "owner",
+      farmOwnerId: null,
+      isActive: true,
+      plan: "free",
+      billingStatus: "inactive",
+    });
     return NextResponse.json({ success: true });
   } catch (err) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });

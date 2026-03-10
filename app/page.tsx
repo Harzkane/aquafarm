@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { getServerSession } from "next-auth";
 import { ArrowRight, Check, Database, Droplets, Fish, LineChart, ShieldCheck, Waves } from "lucide-react";
+import { authOptions } from "@/lib/auth";
+import SignOutButton from "@/components/auth/SignOutButton";
 
 const CORE_ITEMS = [
   "Batch lifecycle tracking",
@@ -30,7 +33,10 @@ const TRUST = [
   { title: "Action-oriented", desc: "Alerts and milestones keep daily priorities visible." },
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  const session = await getServerSession(authOptions);
+  const isAuthenticated = Boolean(session?.user);
+
   return (
     <div className="min-h-screen bg-[#0d1117] text-[#e6edf3]">
       <header className="border-b border-white/10">
@@ -43,12 +49,32 @@ export default function HomePage() {
             <span className="font-semibold tracking-tight">AquaFarm</span>
           </div>
           <div className="flex items-center gap-2">
-            <Link href="/login" className="btn-secondary !py-2 !px-4">
-              Sign in
-            </Link>
-            <Link href="/login" className="btn-primary !py-2 !px-4">
-              Start now
-            </Link>
+            {isAuthenticated ? (
+              <>
+                <Link href="/plans" className="btn-secondary !py-2 !px-4">
+                  Plans
+                </Link>
+                <Link href="/settings/billing" className="btn-secondary !py-2 !px-4">
+                  Billing
+                </Link>
+                <Link href="/dashboard" className="btn-primary !py-2 !px-4">
+                  Dashboard
+                </Link>
+                <SignOutButton className="btn-secondary !py-2 !px-4" />
+              </>
+            ) : (
+              <>
+                <Link href="/plans" className="btn-secondary !py-2 !px-4">
+                  Plans
+                </Link>
+                <Link href="/login" className="btn-secondary !py-2 !px-4">
+                  Sign in
+                </Link>
+                <Link href="/login" className="btn-primary !py-2 !px-4">
+                  Start now
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -65,10 +91,17 @@ export default function HomePage() {
               and financial reporting.
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
-              <Link href="/login" className="btn-primary">
-                Open workspace
-                <ArrowRight className="w-4 h-4" />
-              </Link>
+              {isAuthenticated ? (
+                <Link href="/dashboard" className="btn-primary">
+                  Open workspace
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              ) : (
+                <Link href="/login" className="btn-primary">
+                  Open workspace
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              )}
               <Link href="/dashboard" className="btn-secondary">
                 Dashboard preview
               </Link>

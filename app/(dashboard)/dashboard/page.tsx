@@ -159,6 +159,7 @@ export default async function DashboardPage() {
     tanks: JSON.parse(JSON.stringify(tanks)),
     farmName: (session?.user as any)?.farmName || "My Catfish Farm",
     userName: session?.user?.name || "Farmer",
+    plan: ((session?.user as any)?.plan || "free") as "free" | "pro" | "commercial",
   };
 
   return <DashboardClient {...props} />;

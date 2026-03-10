@@ -4,7 +4,9 @@ import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import {
   LayoutDashboard, Fish, ClipboardList, Skull,
-  TrendingUp, Waves, Calendar, LogOut, Menu, X, Droplets, TestTube2, ShoppingBasket, Wheat, FileBarChart2, BookOpen,
+  TrendingUp, Waves, Calendar, LogOut, Menu, X, Droplets, TestTube2, ShoppingBasket, Wheat, FileBarChart2, BookOpen, CircleDollarSign, CreditCard, Lock,
+  Users,
+  ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -19,15 +21,28 @@ const NAV = [
   { href: "/harvest",     icon: ShoppingBasket,   label: "Harvest"         },
   { href: "/financials",  icon: TrendingUp,       label: "Financials"      },
   { href: "/reports",     icon: FileBarChart2,    label: "Reports"         },
+  { href: "/plans",       icon: CircleDollarSign, label: "Plans & ROI"     },
+  { href: "/settings/billing", icon: CreditCard,  label: "Billing"         },
+  { href: "/settings/staff", icon: Users, label: "Staff Access"            },
+  { href: "/settings/audit", icon: ShieldCheck, label: "Operations Audit"  },
   { href: "/playbook",    icon: BookOpen,         label: "Playbook"        },
   { href: "/tanks",       icon: Waves,            label: "Tanks"           },
   { href: "/calendar",    icon: Calendar,         label: "Calendar"        },
 ];
 
+// Starter Free scope from /plans:
+// - 1 active batch, up to 4 tanks
+// - Daily logs + basic dashboard
+// - 30-day history (handled in reports API)
+// Advanced modules below are locked for Free in nav.
+const FREE_LOCKED = new Set(["/financials", "/harvest", "/playbook", "/calendar"]);
+
 export default function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const currentPlan = ((session?.user as any)?.plan || "free") as "free" | "pro" | "commercial";
+  const currentRole = ((session?.user as any)?.role || "owner") as "owner" | "staff";
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
@@ -47,13 +62,31 @@ export default function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {NAV.map(({ href, icon: Icon, label }) => (
-          <Link key={href} href={href} onClick={() => setMobileOpen(false)}
-            className={cn("nav-item", pathname.startsWith(href) && "active")}>
-            <Icon className="w-4 h-4 flex-shrink-0" />
-            <span>{label}</span>
-          </Link>
-        ))}
+        {NAV.map(({ href, icon: Icon, label }) => {
+          if (href === "/settings/billing" && currentRole === "staff") return null;
+          if (href === "/settings/staff" && !(currentPlan === "commercial" && currentRole === "owner")) return null;
+          if (href === "/settings/audit" && !(currentPlan === "commercial" && currentRole === "owner")) return null;
+          const locked = currentPlan === "free" && FREE_LOCKED.has(href);
+          const targetHref = locked ? "/plans" : href;
+          return (
+            <Link
+              key={href}
+              href={targetHref}
+              onClick={() => setMobileOpen(false)}
+              className={cn("nav-item", !locked && pathname.startsWith(href) && "active")}
+              title={locked ? "Available on paid plans" : undefined}
+            >
+              <Icon className="w-4 h-4 flex-shrink-0" />
+              <span>{label}</span>
+              {locked ? (
+                <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-amber-400/35 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
+                  <Lock className="w-3 h-3" />
+                  Upgrade
+                </span>
+              ) : null}
+            </Link>
+          );
+        })}
       </nav>
 
       {/* User */}

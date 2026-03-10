@@ -3,6 +3,8 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Fish, Droplets, TrendingUp, Package, AlertCircle, CheckCircle, Clock } from "lucide-react";
 import { formatNaira, calcSurvivalRate, weeksSince, getBatchPhase } from "@/lib/utils";
 import Link from "next/link";
+import CurrentPlanBadge from "@/components/billing/CurrentPlanBadge";
+import { getPriorityWhatsAppHref } from "@/lib/support";
 
 interface ActionItem {
   level: "info" | "warning" | "danger";
@@ -17,7 +19,10 @@ interface Props {
   activeBatches: number; totalTanks: number; chartData: any[];
   actions: ActionItem[];
   batches: any[]; tanks: any[]; farmName: string; userName: string;
+  plan: "free" | "pro" | "commercial";
 }
+
+const FREE_LOCKED_ACTION_PREFIXES = ["/financials", "/harvest", "/calendar", "/playbook"];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
@@ -36,12 +41,53 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function DashboardClient({
   totalFish, totalInitial, totalFeedToday, totalMortality30d,
   totalExpenses, totalRevenue, activeBatches, totalTanks,
-  chartData, actions, batches, tanks, farmName, userName,
+  chartData, actions, batches, tanks, farmName, userName, plan,
 }: Props) {
   const survivalRate = calcSurvivalRate(totalFish, totalInitial);
   const netProfit = totalRevenue - totalExpenses;
+  const isFree = plan === "free";
+  const communitySupportHref = process.env.NEXT_PUBLIC_COMMUNITY_SUPPORT_URL || "";
+  const prioritySupportHref = getPriorityWhatsAppHref(plan, userName);
 
-  const kpis = [
+  const visibleActions = (isFree
+    ? actions.filter((a) => !FREE_LOCKED_ACTION_PREFIXES.some((prefix) => a.href.startsWith(prefix)))
+    : actions
+  ).slice(0, 4);
+
+  const kpis = isFree ? [
+    {
+      label: "Fish Alive",
+      value: totalFish.toLocaleString(),
+      sub: `of ${totalInitial.toLocaleString()} stocked`,
+      icon: Fish,
+      color: "#9ca3af",
+      glow: "rgba(69,184,128,0.2)",
+    },
+    {
+      label: "Survival Rate",
+      value: `${survivalRate}%`,
+      sub: `${totalMortality30d} deaths (30 days)`,
+      icon: CheckCircle,
+      color: Number(survivalRate) > 85 ? "#9ca3af" : Number(survivalRate) > 70 ? "#d3bf86" : "#f87171",
+      glow: "rgba(69,184,128,0.15)",
+    },
+    {
+      label: "Feed Today",
+      value: `${totalFeedToday}kg`,
+      sub: "across all tanks",
+      icon: Droplets,
+      color: "#75d7ff",
+      glow: "rgba(117,215,255,0.15)",
+    },
+    {
+      label: "Mortality (30d)",
+      value: totalMortality30d.toLocaleString(),
+      sub: "logged fish deaths",
+      icon: AlertCircle,
+      color: totalMortality30d > 0 ? "#fbbf24" : "var(--success)",
+      glow: "rgba(245, 158, 11, 0.18)",
+    },
+  ] : [
     {
       label: "Fish Alive",
       value: totalFish.toLocaleString(),
@@ -87,23 +133,29 @@ export default function DashboardClient({
           <p className="text-pond-400/70 text-sm mt-1">{farmName} · Abuja, Nigeria</p>
         </div>
         <div className="hidden sm:flex items-center gap-2">
+          <CurrentPlanBadge />
           <Link href="/batches" className="badge badge-green hover:opacity-90 transition-opacity">
             <span className="w-1.5 h-1.5 rounded-full bg-pond-400 animate-pulse-slow" />
             {activeBatches} Active {activeBatches === 1 ? "Batch" : "Batches"}
           </Link>
           <Link href="/tanks" className="badge badge-water hover:opacity-90 transition-opacity">{totalTanks} Tanks</Link>
+          {!isFree && prioritySupportHref ? (
+            <a href={prioritySupportHref} target="_blank" rel="noreferrer" className="badge badge-green hover:opacity-90 transition-opacity">
+              Priority support
+            </a>
+          ) : null}
         </div>
       </div>
 
       {/* Action required */}
-      {actions.length > 0 && (
+      {visibleActions.length > 0 && (
         <div className="glass-card p-5 space-y-3">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-warning" />
             <h2 className="section-title !text-base">Action Required</h2>
           </div>
           <div className="space-y-2.5">
-            {actions.map((action, i) => (
+            {visibleActions.map((action, i) => (
               <Link
                 key={`${action.title}-${i}`}
                 href={action.href}
@@ -240,18 +292,35 @@ export default function DashboardClient({
       )}
 
       {/* Financial summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {[
-          { label: "Total Revenue", value: formatNaira(totalRevenue), color: "var(--success)" },
-          { label: "Total Expenses", value: formatNaira(totalExpenses), color: "var(--danger)" },
-          { label: "Net Profit / Loss", value: formatNaira(netProfit), color: netProfit >= 0 ? "var(--success)" : "var(--danger)" },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="glass-card px-5 py-4 flex items-center justify-between">
-            <p className="text-xs text-pond-200/75 uppercase tracking-wider font-medium">{label}</p>
-            <p className="font-mono font-semibold text-sm" style={{ color }}>{value}</p>
+      {!isFree ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {[
+            { label: "Total Revenue", value: formatNaira(totalRevenue), color: "var(--success)" },
+            { label: "Total Expenses", value: formatNaira(totalExpenses), color: "var(--danger)" },
+            { label: "Net Profit / Loss", value: formatNaira(netProfit), color: netProfit >= 0 ? "var(--success)" : "var(--danger)" },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="glass-card px-5 py-4 flex items-center justify-between">
+              <p className="text-xs text-pond-200/75 uppercase tracking-wider font-medium">{label}</p>
+              <p className="font-mono font-semibold text-sm" style={{ color }}>{value}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="glass-card px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-xs text-pond-200/75 uppercase tracking-wider font-medium">Starter Dashboard</p>
+            <p className="text-sm text-pond-200/80 mt-1">Upgrade to unlock Financials, Harvest, Calendar, and advanced profitability views.</p>
           </div>
-        ))}
-      </div>
+          <div className="flex items-center gap-2">
+            {communitySupportHref ? (
+              <a href={communitySupportHref} target="_blank" rel="noreferrer" className="btn-secondary !px-4 !py-2">
+                Community support
+              </a>
+            ) : null}
+            <Link href="/plans" className="btn-secondary !px-4 !py-2">See plans</Link>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

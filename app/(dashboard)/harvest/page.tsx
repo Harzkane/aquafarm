@@ -27,6 +27,8 @@ export default function HarvestPage() {
 
   const [batchFilter, setBatchFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [salesPage, setSalesPage] = useState(1);
+  const [salesPageSize, setSalesPageSize] = useState(10);
 
   const [form, setForm] = useState({
     batchId: "",
@@ -82,6 +84,35 @@ export default function HarvestPage() {
       { fishSold: 0, weightKg: 0, revenue: 0 }
     );
   }, [visibleRows]);
+  const channelBreakdown = useMemo(() => {
+    const map: Record<string, { channel: string; revenue: number; fishSold: number; weightKg: number; records: number }> = {};
+    for (const row of visibleRows) {
+      const channel = (row.channel || "other").toLowerCase();
+      if (!map[channel]) {
+        map[channel] = { channel, revenue: 0, fishSold: 0, weightKg: 0, records: 0 };
+      }
+      map[channel].revenue += Number(row.totalAmount || 0);
+      map[channel].fishSold += Number(row.fishSold || 0);
+      map[channel].weightKg += Number(row.weightKg || 0);
+      map[channel].records += 1;
+    }
+    return Object.values(map).sort((a, b) => b.revenue - a.revenue);
+  }, [visibleRows]);
+  const salesTotalPages = Math.max(1, Math.ceil(visibleRows.length / salesPageSize));
+  const salesPageStart = visibleRows.length === 0 ? 0 : (salesPage - 1) * salesPageSize + 1;
+  const salesPageEnd = Math.min(visibleRows.length, salesPage * salesPageSize);
+  const paginatedSalesRows = useMemo(() => {
+    const start = (salesPage - 1) * salesPageSize;
+    return visibleRows.slice(start, start + salesPageSize);
+  }, [salesPage, salesPageSize, visibleRows]);
+
+  useEffect(() => {
+    setSalesPage(1);
+  }, [batchFilter, search, salesPageSize]);
+
+  useEffect(() => {
+    setSalesPage((prev) => Math.min(prev, salesTotalPages));
+  }, [salesTotalPages]);
 
   function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -232,6 +263,28 @@ export default function HarvestPage() {
         </div>
       </div>
 
+      <div className="glass-card p-5 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h2 className="section-title">Harvest Channels</h2>
+          <p className="text-xs text-pond-200/65">{channelBreakdown.length} channels</p>
+        </div>
+        {channelBreakdown.length === 0 ? (
+          <p className="text-sm text-pond-200/70">No channel data yet.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {channelBreakdown.map((channel) => (
+              <div key={channel.channel} className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+                <p className="text-xs uppercase tracking-wider text-pond-300">{channel.channel}</p>
+                <p className="text-lg font-semibold text-success mt-1">{formatNaira(channel.revenue)}</p>
+                <p className="text-xs text-pond-200/70 mt-1">
+                  {channel.records} sale{channel.records > 1 ? "s" : ""} · {channel.weightKg.toFixed(1)}kg · {channel.fishSold.toLocaleString()} fish
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="glass-card overflow-hidden">
         <div className="px-5 py-4 border-b border-pond-700/20 flex items-center justify-between gap-2">
           <h2 className="section-title">Recent Harvest Sales</h2>
@@ -245,7 +298,7 @@ export default function HarvestPage() {
         ) : (
           <>
             <div className="md:hidden divide-y divide-pond-700/20">
-              {visibleRows.map((row) => (
+              {paginatedSalesRows.map((row) => (
                 <div key={row._id} className="p-4 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm text-pond-200 font-medium">{row.batchName}</p>
@@ -278,7 +331,7 @@ export default function HarvestPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleRows.map((row) => (
+                  {paginatedSalesRows.map((row) => (
                     <tr key={row._id}>
                       <td className="font-mono text-xs">
                         {new Date(row.date).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}
@@ -294,6 +347,41 @@ export default function HarvestPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+            <div className="border-t border-pond-700/20 px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-pond-200/65">
+                Showing {salesPageStart}-{salesPageEnd} of {visibleRows.length}
+              </p>
+              <div className="flex items-center gap-2 overflow-x-auto">
+                <select
+                  className="field !w-auto !py-1.5 !px-2.5 !text-xs shrink-0"
+                  value={salesPageSize}
+                  onChange={(e) => setSalesPageSize(Number(e.target.value))}
+                >
+                  <option value={10}>10 / page</option>
+                  <option value={20}>20 / page</option>
+                  <option value={50}>50 / page</option>
+                </select>
+                <button
+                  type="button"
+                  className="btn-secondary !px-3 !py-1.5 text-xs"
+                  onClick={() => setSalesPage((p) => Math.max(1, p - 1))}
+                  disabled={salesPage <= 1}
+                >
+                  Previous
+                </button>
+                <span className="text-xs text-pond-200/75">
+                  Page {salesPage} of {salesTotalPages}
+                </span>
+                <button
+                  type="button"
+                  className="btn-secondary !px-3 !py-1.5 text-xs"
+                  onClick={() => setSalesPage((p) => Math.min(salesTotalPages, p + 1))}
+                  disabled={salesPage >= salesTotalPages}
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </>
         )}

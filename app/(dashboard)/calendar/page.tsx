@@ -37,6 +37,18 @@ type CalendarEvent = {
   notes?: string;
 };
 
+type ReminderItem = {
+  id: string;
+  batchId: string;
+  batchName: string;
+  label: string;
+  kind: "sort" | "harvest";
+  week: number;
+  dueDate: Date;
+  dayOffset: number;
+  status: "overdue" | "dueSoon" | "upcoming";
+};
+
 type Milestone = {
   week: number;
   label: string;
@@ -179,6 +191,46 @@ export default function CalendarPage() {
     () => batches.filter((b) => b.status === "active" || b.status === "partial").length,
     [batches]
   );
+  const reminders = useMemo<ReminderItem[]>(() => {
+    const today = startOfDay(new Date());
+    const list: ReminderItem[] = [];
+
+    for (const batch of batches) {
+      if (!(batch.status === "active" || batch.status === "partial")) continue;
+
+      const stockDate = new Date(batch.stockingDate);
+      for (const milestone of MILESTONES) {
+        const key = eventKey(batch._id, milestone.kind, milestone.week);
+        const confirmation = eventsByKey[key];
+        const doneByEvent = milestone.kind === "sort" && Boolean(confirmation);
+        const doneByHarvestStatus = milestone.kind === "harvest" && batch.status === "harvested";
+        if (doneByEvent || doneByHarvestStatus) continue;
+
+        const dueDate = startOfDay(addWeeks(stockDate, milestone.week));
+        const dayOffset = dayDiff(today, dueDate);
+        const status: ReminderItem["status"] =
+          dayOffset < -3 ? "overdue" : dayOffset <= 7 ? "dueSoon" : "upcoming";
+
+        list.push({
+          id: `${batch._id}:${milestone.kind}:${milestone.week}`,
+          batchId: batch._id,
+          batchName: batch.name,
+          label: milestone.label,
+          kind: milestone.kind,
+          week: milestone.week,
+          dueDate,
+          dayOffset,
+          status,
+        });
+      }
+    }
+
+    return list
+      .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
+      .slice(0, 10);
+  }, [batches, eventsByKey]);
+  const dueSoonCount = reminders.filter((r) => r.status === "dueSoon").length;
+  const overdueCount = reminders.filter((r) => r.status === "overdue").length;
 
   if (loading) {
     return (
@@ -201,6 +253,49 @@ export default function CalendarPage() {
           <span>{error}</span>
         </div>
       )}
+
+      <div className="glass-card p-5 space-y-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="section-title !text-base">Upcoming Reminders</h2>
+            <p className="text-xs text-pond-200/70 mt-1">Next calendar actions for your active batches.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="badge badge-amber text-xs">{dueSoonCount} due soon</span>
+            <span className="badge badge-red text-xs">{overdueCount} overdue</span>
+          </div>
+        </div>
+        {reminders.length === 0 ? (
+          <p className="text-sm text-pond-200/70">No pending reminders. You are up to date.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            {reminders.map((item) => (
+              <div
+                key={item.id}
+                className="rounded-xl px-3 py-2.5 border"
+                style={{ background: "rgba(12, 12, 14,0.5)", borderColor: "rgba(148, 163, 184,0.18)" }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm text-pond-100 font-medium truncate">{item.batchName}</p>
+                  <span
+                    className={`badge text-[10px] ${
+                      item.status === "overdue" ? "badge-red" : item.status === "dueSoon" ? "badge-amber" : "badge-water"
+                    }`}
+                  >
+                    {item.status === "overdue" ? "Overdue" : item.status === "dueSoon" ? "Due soon" : "Upcoming"}
+                  </span>
+                </div>
+                <p className="text-xs text-pond-200/75 mt-1">
+                  {item.label} (Week {item.week}) · {format(item.dueDate, "d MMM yyyy")}
+                </p>
+                <p className="text-[11px] text-pond-200/65 mt-1">
+                  {item.dayOffset < 0 ? `${Math.abs(item.dayOffset)}d ago` : item.dayOffset === 0 ? "today" : `in ${item.dayOffset}d`}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {batches.length === 0 ? (
         <div className="glass-card p-16 text-center">

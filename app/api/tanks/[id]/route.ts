@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Tank } from "@/models/Tank";
 import { Batch } from "@/models/Batch";
+import { recordAuditEvent } from "@/lib/audit";
 
 const TANK_TYPES = new Set(["tarpaulin", "half-cut", "concrete", "fiberglass"]);
 const STATUSES = new Set(["active", "empty", "cleaning", "quarantine"]);
@@ -130,6 +131,14 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     }
 
     await tank.save();
+    await recordAuditEvent({
+      sessionUser: session.user,
+      action: "update",
+      resource: "tank",
+      resourceId: tank._id.toString(),
+      summary: `Updated tank ${tank.name}`,
+      meta: { fields: Object.keys(validated.value) },
+    }).catch(() => {});
     return NextResponse.json(tank);
   } catch {
     return NextResponse.json({ error: "Failed to update tank" }, { status: 500 });
@@ -175,6 +184,13 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: str
     }
 
     await tank.deleteOne();
+    await recordAuditEvent({
+      sessionUser: session.user,
+      action: "delete",
+      resource: "tank",
+      resourceId: tank._id.toString(),
+      summary: `Deleted tank ${tank.name}`,
+    }).catch(() => {});
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Failed to delete tank" }, { status: 500 });

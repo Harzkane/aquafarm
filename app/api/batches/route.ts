@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Batch } from "@/models/Batch";
+import { User } from "@/models/User";
+import { getPlanConfig } from "@/lib/plans";
+import { recordAuditEvent } from "@/lib/audit";
 
 function validateBatchPayload(body: any) {
   const name = typeof body?.name === "string" ? body.name.trim() : "";
@@ -59,11 +62,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: validated.error }, { status: 400 });
   }
   await connectDB();
+  const userId = (session.user as any).id;
+  const user = await User.findById(userId).select("plan").lean<any>();
+  const plan = getPlanConfig(user?.plan);
+  if (plan.maxActiveBatches !== null) {
+    const activeCount = await Batch.countDocuments({
+      userId,
+      status: "active",
+      $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
+    });
+    if (activeCount >= plan.maxActiveBatches) {
+      return NextResponse.json(
+        {
+          error: `Your ${plan.label} plan allows up to ${plan.maxActiveBatches} active batch${plan.maxActiveBatches > 1 ? "es" : ""}. Upgrade to add more.`,
+          code: "PLAN_LIMIT_ACTIVE_BATCHES",
+          limit: plan.maxActiveBatches,
+        },
+        { status: 403 }
+      );
+    }
+  }
+
   const batch = await Batch.create({
     ...validated.value,
-    userId: (session.user as any).id,
+    userId,
     currentCount: validated.value.initialCount,
     deletedAt: null,
   });
+  await recordAuditEvent({
+    sessionUser: session.user,
+    action: "create",
+    resource: "batch",
+    resourceId: batch._id.toString(),
+    summary: `Created batch ${batch.name}`,
+    meta: { initialCount: batch.initialCount, status: batch.status },
+  }).catch(() => {});
   return NextResponse.json(batch, { status: 201 });
 }

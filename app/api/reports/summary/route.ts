@@ -6,6 +6,8 @@ import { Batch } from "@/models/Batch";
 import { DailyLog } from "@/models/DailyLog";
 import { Financial } from "@/models/Financial";
 import { FeedInventory } from "@/models/FeedInventory";
+import { User } from "@/models/User";
+import { getPlanConfig } from "@/lib/plans";
 
 function getRangeStart(range: string) {
   const now = Date.now();
@@ -14,16 +16,137 @@ function getRangeStart(range: string) {
   return null;
 }
 
+function startOfDay(date: Date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfDay(date: Date) {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+function startOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function endOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
+}
+
+type Bucket = {
+  key: string;
+  label: string;
+  start: Date;
+  end: Date;
+  revenue: number;
+  expense: number;
+  mortality: number;
+  feed: number;
+};
+
+function buildBuckets(
+  range: string,
+  now: Date,
+  logs: any[],
+  expenses: any[],
+  revenue: any[]
+): { granularity: "daily" | "weekly" | "monthly"; buckets: Bucket[] } {
+  if (range === "30d") {
+    const buckets: Bucket[] = [];
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(now.getDate() - i);
+      const start = startOfDay(date);
+      const end = endOfDay(date);
+      buckets.push({
+        key: start.toISOString().slice(0, 10),
+        label: start.toLocaleDateString("en-NG", { day: "numeric", month: "short" }),
+        start,
+        end,
+        revenue: 0,
+        expense: 0,
+        mortality: 0,
+        feed: 0,
+      });
+    }
+    return { granularity: "daily", buckets };
+  }
+
+  if (range === "90d") {
+    const buckets: Bucket[] = [];
+    const windowStart = startOfDay(new Date(now.getTime() - 89 * 24 * 60 * 60 * 1000));
+    for (let i = 0; i < 13; i++) {
+      const start = startOfDay(new Date(windowStart.getTime() + i * 7 * 24 * 60 * 60 * 1000));
+      const end = endOfDay(new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000));
+      buckets.push({
+        key: `${start.toISOString().slice(0, 10)}_wk`,
+        label: start.toLocaleDateString("en-NG", { day: "numeric", month: "short" }),
+        start,
+        end,
+        revenue: 0,
+        expense: 0,
+        mortality: 0,
+        feed: 0,
+      });
+    }
+    return { granularity: "weekly", buckets };
+  }
+
+  const candidateDates: Date[] = [];
+  for (const l of logs) {
+    const d = new Date(l.date);
+    if (!Number.isNaN(d.getTime())) candidateDates.push(d);
+  }
+  for (const e of expenses) {
+    const d = new Date(e.date);
+    if (!Number.isNaN(d.getTime())) candidateDates.push(d);
+  }
+  for (const r of revenue) {
+    const d = new Date(r.date);
+    if (!Number.isNaN(d.getTime())) candidateDates.push(d);
+  }
+  const earliest = candidateDates.length
+    ? new Date(Math.min(...candidateDates.map((d) => d.getTime())))
+    : new Date(now.getFullYear(), now.getMonth() - 5, 1);
+
+  const monthCursor = startOfMonth(earliest);
+  const monthEnd = startOfMonth(now);
+  const buckets: Bucket[] = [];
+  while (monthCursor <= monthEnd) {
+    const start = startOfMonth(monthCursor);
+    const end = endOfMonth(monthCursor);
+    buckets.push({
+      key: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`,
+      label: start.toLocaleDateString("en-NG", { month: "short", year: "2-digit" }),
+      start,
+      end,
+      revenue: 0,
+      expense: 0,
+      mortality: 0,
+      feed: 0,
+    });
+    monthCursor.setMonth(monthCursor.getMonth() + 1, 1);
+  }
+  return { granularity: "monthly", buckets };
+}
+
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const userId = (session.user as any).id;
   const { searchParams } = new URL(req.url);
-  const range = searchParams.get("range") || "90d";
-  const start = getRangeStart(range);
+  const requestedRange = searchParams.get("range") || "90d";
 
   await connectDB();
+  const user = await User.findById(userId).select("plan").lean<any>();
+  const plan = getPlanConfig(user?.plan);
+
+  const range = plan.reportHistoryDays === 30 ? "30d" : requestedRange;
+  const start = getRangeStart(range);
 
   const [batches, logs, financials, feedInventory] = await Promise.all([
     Batch.find({
@@ -69,41 +192,131 @@ export async function GET(req: NextRequest) {
     const ammo = Number(l.ammonia);
     return (Number.isFinite(ph) && (ph < 6.5 || ph > 8)) || (Number.isFinite(ammo) && ammo >= 0.5);
   }).length;
+  const canAdvancedReporting = plan.key === "commercial";
 
-  const monthlyMap: Record<string, { month: string; revenue: number; expense: number; mortality: number; feed: number }> = {};
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date();
-    d.setMonth(d.getMonth() - i, 1);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    monthlyMap[key] = {
-      month: d.toLocaleDateString("en-NG", { month: "short" }),
-      revenue: 0,
-      expense: 0,
-      mortality: 0,
-      feed: 0,
-    };
-  }
+  const { granularity, buckets } = buildBuckets(range, new Date(), logs, expenses, revenue);
 
   for (const e of expenses) {
     const d = new Date(e.date);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    if (monthlyMap[key]) monthlyMap[key].expense += Number(e.amount || 0);
+    if (Number.isNaN(d.getTime())) continue;
+    const bucket = buckets.find((b) => d >= b.start && d <= b.end);
+    if (bucket) bucket.expense += Number(e.amount || 0);
   }
   for (const r of revenue) {
     const d = new Date(r.date);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    if (monthlyMap[key]) monthlyMap[key].revenue += Number(r.totalAmount || 0);
+    if (Number.isNaN(d.getTime())) continue;
+    const bucket = buckets.find((b) => d >= b.start && d <= b.end);
+    if (bucket) bucket.revenue += Number(r.totalAmount || 0);
   }
   for (const l of logs) {
     const d = new Date(l.date);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    if (monthlyMap[key]) {
-      monthlyMap[key].mortality += Number(l.mortality || 0);
-      monthlyMap[key].feed += Number(l.feedGiven || 0);
+    if (Number.isNaN(d.getTime())) continue;
+    const bucket = buckets.find((b) => d >= b.start && d <= b.end);
+    if (bucket) {
+      bucket.mortality += Number(l.mortality || 0);
+      bucket.feed += Number(l.feedGiven || 0);
     }
   }
 
+  let advanced: any = null;
+  if (canAdvancedReporting) {
+    const batchMap = new Map<string, any>(batches.map((b: any) => [String(b._id), b]));
+    const batchStats: Record<
+      string,
+      {
+        batchId: string;
+        batchName: string;
+        status: string;
+        initialCount: number;
+        currentCount: number;
+        feedKg: number;
+        mortality: number;
+        waterRiskLogs: number;
+        revenue: number;
+        harvestedKg: number;
+      }
+    > = {};
+
+    for (const batch of batches) {
+      const id = String(batch._id);
+      batchStats[id] = {
+        batchId: id,
+        batchName: String(batch.name || "Unnamed batch"),
+        status: String(batch.status || "active"),
+        initialCount: Number(batch.initialCount || 0),
+        currentCount: Number(batch.currentCount || 0),
+        feedKg: 0,
+        mortality: 0,
+        waterRiskLogs: 0,
+        revenue: 0,
+        harvestedKg: 0,
+      };
+    }
+
+    for (const log of logs) {
+      const batchId = String(log.batchId || "");
+      if (!batchId || !batchStats[batchId]) continue;
+      batchStats[batchId].feedKg += Number(log.feedGiven || 0);
+      batchStats[batchId].mortality += Number(log.mortality || 0);
+
+      const ph = Number(log.ph);
+      const ammo = Number(log.ammonia);
+      const isRisk = (Number.isFinite(ph) && (ph < 6.5 || ph > 8)) || (Number.isFinite(ammo) && ammo >= 0.5);
+      if (isRisk) batchStats[batchId].waterRiskLogs += 1;
+    }
+
+    for (const rev of revenue) {
+      const batchId = String(rev.batchId || "");
+      if (!batchId || !batchStats[batchId]) continue;
+      batchStats[batchId].revenue += Number(rev.totalAmount || 0);
+      batchStats[batchId].harvestedKg += Number(rev.weightKg || 0);
+    }
+
+    const batchPerformance = Object.values(batchStats)
+      .map((row) => ({
+        ...row,
+        survivalRate: row.initialCount > 0 ? (row.currentCount / row.initialCount) * 100 : 0,
+        feedPerFishKg: row.currentCount > 0 ? row.feedKg / row.currentCount : 0,
+        avgPricePerKg: row.harvestedKg > 0 ? row.revenue / row.harvestedKg : 0,
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    const channelMap: Record<
+      string,
+      { channel: string; revenue: number; weightKg: number; fishSold: number; records: number }
+    > = {};
+    for (const rev of revenue) {
+      const channel = String(rev.channel || "other").toLowerCase();
+      if (!channelMap[channel]) {
+        channelMap[channel] = { channel, revenue: 0, weightKg: 0, fishSold: 0, records: 0 };
+      }
+      channelMap[channel].revenue += Number(rev.totalAmount || 0);
+      channelMap[channel].weightKg += Number(rev.weightKg || 0);
+      channelMap[channel].fishSold += Number(rev.fishSold || 0);
+      channelMap[channel].records += 1;
+    }
+    const channelPerformance = Object.values(channelMap).sort((a, b) => b.revenue - a.revenue);
+
+    const riskHotspots = batchPerformance
+      .filter((row) => row.waterRiskLogs > 0)
+      .sort((a, b) => b.waterRiskLogs - a.waterRiskLogs)
+      .slice(0, 8);
+
+    advanced = {
+      batchPerformance,
+      channelPerformance,
+      riskHotspots,
+      generatedAt: new Date().toISOString(),
+      batchesAnalyzed: batchPerformance.length,
+    };
+  }
+
   return NextResponse.json({
+    requestedRange,
+    planRestricted: range !== requestedRange,
+    canExport: plan.key !== "free",
+    canAdvancedReporting,
+    granularity,
     range,
     summary: {
       totalRevenue,
@@ -123,7 +336,13 @@ export async function GET(req: NextRequest) {
       activeBatches: batches.filter((b: any) => b.status === "active" || b.status === "partial").length,
       harvestedBatches: batches.filter((b: any) => b.status === "harvested").length,
     },
-    monthly: Object.values(monthlyMap),
+    monthly: buckets.map((b) => ({
+      month: b.label,
+      revenue: b.revenue,
+      expense: b.expense,
+      mortality: b.mortality,
+      feed: b.feed,
+    })),
+    advanced,
   });
 }
-

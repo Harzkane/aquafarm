@@ -40,6 +40,8 @@ export default function WaterQualityPage() {
   const [showForm, setShowForm] = useState(false);
   const [logs, setLogs] = useState<WaterLog[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [isFreePlan, setIsFreePlan] = useState(false);
+  const communitySupportHref = process.env.NEXT_PUBLIC_COMMUNITY_SUPPORT_URL || "";
 
   const [batchFilter, setBatchFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -62,13 +64,19 @@ export default function WaterQualityPage() {
     setLoading(true);
     setError("");
     try {
-      const [logsRes, batchRes] = await Promise.all([fetch("/api/water-quality?limit=200"), fetch("/api/batches")]);
+      const [logsRes, batchRes, billingRes] = await Promise.all([
+        fetch("/api/water-quality?limit=5000"),
+        fetch("/api/batches"),
+        fetch("/api/billing/status"),
+      ]);
       const logsPayload = await logsRes.json();
       const batchesPayload = await batchRes.json();
+      const billingPayload = billingRes.ok ? await billingRes.json() : null;
       if (!logsRes.ok) throw new Error(logsPayload?.error || "Failed to load water logs");
       if (!batchRes.ok) throw new Error(batchesPayload?.error || "Failed to load batches");
       setLogs(Array.isArray(logsPayload) ? logsPayload : []);
       setBatches(Array.isArray(batchesPayload) ? batchesPayload : []);
+      setIsFreePlan((billingPayload?.plan || "free") === "free");
       if (!form.batchId && batchesPayload?.[0]?._id) {
         setForm((f) => ({ ...f, batchId: batchesPayload[0]._id }));
       }
@@ -180,6 +188,22 @@ export default function WaterQualityPage() {
           <Plus className="w-4 h-4" /> Add Reading
         </button>
       </div>
+
+      {isFreePlan ? (
+        <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          <p>Starter Free keeps water-quality history to the last 30 days.</p>
+          {communitySupportHref ? (
+            <a
+              href={communitySupportHref}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex text-xs text-amber-200 underline underline-offset-4 hover:text-amber-100"
+            >
+              Need help? Join Community support
+            </a>
+          ) : null}
+        </div>
+      ) : null}
 
       {error && <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10">{error}</div>}
 

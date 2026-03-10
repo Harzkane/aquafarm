@@ -5,6 +5,7 @@ import { connectDB } from "@/lib/db";
 import { DailyLog } from "@/models/DailyLog";
 import { Batch } from "@/models/Batch";
 import { Types } from "mongoose";
+import { recordAuditEvent } from "@/lib/audit";
 
 type LogPatchBody = {
   batchId?: string;
@@ -164,6 +165,24 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     await applyMortalityDelta(newBatchId, userId, newMortality);
   }
 
+  const batch = await Batch.findById(existing.batchId).select("name").lean<any>();
+  await recordAuditEvent({
+    sessionUser: session.user,
+    action: "update",
+    resource: "daily_log",
+    resourceId: existing._id.toString(),
+    summary: `Updated daily log for ${batch?.name || "batch"}`,
+    meta: {
+      batchId: String(existing.batchId || ""),
+      batchName: batch?.name || "",
+      feedSession: existing.feedSession || "morning",
+      feedGiven: Number(existing.feedGiven || 0),
+      mortality: Number(existing.mortality || 0),
+      date: existing.date ? new Date(existing.date).toISOString() : null,
+      fields: Object.keys(update),
+    },
+  }).catch(() => {});
+
   return NextResponse.json(existing);
 }
 
@@ -179,8 +198,25 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 
   const batchId = String(existing.batchId);
   const mortality = Number(existing.mortality || 0);
+  const batch = await Batch.findById(existing.batchId).select("name").lean<any>();
   await existing.deleteOne();
   await applyMortalityDelta(batchId, userId, -mortality);
+
+  await recordAuditEvent({
+    sessionUser: session.user,
+    action: "delete",
+    resource: "daily_log",
+    resourceId: params.id,
+    summary: `Deleted daily log for ${batch?.name || "batch"}`,
+    meta: {
+      batchId,
+      batchName: batch?.name || "",
+      feedSession: existing.feedSession || "morning",
+      feedGiven: Number(existing.feedGiven || 0),
+      mortality,
+      date: existing.date ? new Date(existing.date).toISOString() : null,
+    },
+  }).catch(() => {});
 
   return NextResponse.json({ success: true });
 }

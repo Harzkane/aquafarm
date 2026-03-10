@@ -4,7 +4,10 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { DailyLog } from "@/models/DailyLog";
 import { Batch } from "@/models/Batch";
+import { User } from "@/models/User";
+import { getPlanConfig } from "@/lib/plans";
 import { Types } from "mongoose";
+import { recordAuditEvent } from "@/lib/audit";
 
 type LogPayload = {
   batchId: string;
@@ -110,10 +113,25 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { searchParams } = new URL(req.url);
   const batchId = searchParams.get("batchId");
-  const limit   = parseInt(searchParams.get("limit") || "50");
+  const requestedLimit = Number(searchParams.get("limit") || 100);
   await connectDB();
-  const query: any = { userId: (session.user as any).id };
+  const userId = (session.user as any).id;
+  const user = await User.findById(userId).select("plan").lean<any>();
+  const plan = getPlanConfig(user?.plan);
+  const maxLimit = plan.reportHistoryDays ? 300 : 5000;
+  const fallbackLimit = plan.reportHistoryDays ? 100 : 1000;
+  const limit = Math.max(
+    1,
+    Math.min(maxLimit, Number.isFinite(requestedLimit) ? Math.trunc(requestedLimit) : fallbackLimit)
+  );
+
+  const query: any = { userId };
   if (batchId && Types.ObjectId.isValid(batchId)) query.batchId = batchId;
+  if (plan.reportHistoryDays) {
+    const historyStart = new Date(Date.now() - plan.reportHistoryDays * 24 * 60 * 60 * 1000);
+    query.date = { $gte: historyStart };
+  }
+
   const logs = await DailyLog.find(query).sort({ date: -1 }).limit(limit).populate("batchId", "name");
   return NextResponse.json(logs);
 }
@@ -151,6 +169,7 @@ export async function POST(req: NextRequest) {
   });
 
   let log;
+  let auditAction: "create" | "update" = "create";
   if (existing) {
     const previousMortality = Number(existing.mortality || 0);
     const nextMortality = Number(payload.mortality || 0);
@@ -160,10 +179,27 @@ export async function POST(req: NextRequest) {
     await existing.save();
     await applyMortalityDelta(payload.batchId, userId, deltaMortality);
     log = existing;
+    auditAction = "update";
   } else {
     log = await DailyLog.create({ ...payload, userId, date: logDate });
     await applyMortalityDelta(payload.batchId, userId, Number(payload.mortality || 0));
   }
+
+  await recordAuditEvent({
+    sessionUser: session.user,
+    action: auditAction,
+    resource: "daily_log",
+    resourceId: log._id.toString(),
+    summary: `${auditAction === "create" ? "Created" : "Updated"} daily log for ${batch.name}`,
+    meta: {
+      batchId: batch._id.toString(),
+      batchName: batch.name,
+      feedSession: payload.feedSession || "morning",
+      feedGiven: Number(payload.feedGiven || 0),
+      mortality: Number(payload.mortality || 0),
+      date: logDate.toISOString(),
+    },
+  }).catch(() => {});
 
   return NextResponse.json(log, { status: 201 });
 }

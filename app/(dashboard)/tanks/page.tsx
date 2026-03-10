@@ -12,6 +12,8 @@ import {
   Waves,
   X,
 } from "lucide-react";
+import CurrentPlanBadge from "@/components/billing/CurrentPlanBadge";
+import Link from "next/link";
 
 type TankType = "tarpaulin" | "half-cut" | "concrete" | "fiberglass";
 type TankStatus = "empty" | "active" | "cleaning" | "quarantine";
@@ -164,6 +166,12 @@ export default function TanksPage() {
   const [saving, setSaving] = useState(false);
   const [moving, setMoving] = useState(false);
   const [error, setError] = useState("");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeModalMessage, setUpgradeModalMessage] = useState(
+    "You have reached your tank limit for this plan. Upgrade to add more tanks."
+  );
+  const [planLabel, setPlanLabel] = useState("Free");
+  const [tankLimit, setTankLimit] = useState<number | null>(null);
 
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState<TankForm>(initialForm);
@@ -176,6 +184,8 @@ export default function TanksPage() {
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [moveForm, setMoveForm] = useState<MoveForm>(initialMoveForm);
   const [moveError, setMoveError] = useState("");
+  const [movementPage, setMovementPage] = useState(1);
+  const [movementPageSize, setMovementPageSize] = useState(10);
 
   useEffect(() => {
     void loadData();
@@ -185,15 +195,17 @@ export default function TanksPage() {
     setLoading(true);
     setError("");
     try {
-      const [tanksRes, batchesRes, movesRes] = await Promise.all([
+      const [tanksRes, batchesRes, movesRes, billingRes] = await Promise.all([
         fetch("/api/tanks"),
         fetch("/api/batches"),
         fetch("/api/tanks/movements?limit=100"),
+        fetch("/api/billing/status"),
       ]);
 
       const tanksPayload = await tanksRes.json();
       const batchesPayload = await batchesRes.json();
       const movesPayload = await movesRes.json();
+      const billingPayload = billingRes.ok ? await billingRes.json() : null;
 
       if (!tanksRes.ok)
         throw new Error(tanksPayload?.error || "Failed to load tanks");
@@ -209,6 +221,12 @@ export default function TanksPage() {
         ),
       );
       setMovements(movesPayload || []);
+      setPlanLabel(billingPayload?.planLabel || "Free");
+      setTankLimit(
+        typeof billingPayload?.limits?.maxTanks === "number"
+          ? billingPayload.limits.maxTanks
+          : null,
+      );
     } catch (err: any) {
       setError(err?.message || "Failed to load tanks");
     } finally {
@@ -263,7 +281,19 @@ export default function TanksPage() {
         }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload?.error || "Failed to create tank");
+      if (!res.ok) {
+        if (payload?.code === "PLAN_LIMIT_TANKS") {
+          setShowCreate(false);
+          setShowUpgradeModal(true);
+          setUpgradeModalMessage(
+            payload?.error ||
+              "You have reached your tank limit for this plan. Upgrade to add more tanks.",
+          );
+          setError("");
+          return;
+        }
+        throw new Error(payload?.error || "Failed to create tank");
+      }
 
       setTanks((prev) => {
         const existing = prev.find((t) => t._id === payload._id);
@@ -411,6 +441,15 @@ export default function TanksPage() {
   );
   const overallFishLoadPct =
     totalFishTarget > 0 ? Math.round((totalFish / totalFishTarget) * 100) : 0;
+  const sortedTanks = useMemo(() => {
+    return [...tanks].sort((a, b) => {
+      const aRank = a.status === "active" ? 0 : 1;
+      const bRank = b.status === "active" ? 0 : 1;
+      return aRank - bRank;
+    });
+  }, [tanks]);
+  const tankCountLabel =
+    tankLimit === null ? `${tanks.length} / Unlimited` : `${tanks.length} / ${tankLimit}`;
   const selectedFromTank = useMemo(
     () => tanks.find((t) => t._id === moveForm.fromTankId) || null,
     [tanks, moveForm.fromTankId],
@@ -441,6 +480,21 @@ export default function TanksPage() {
     requestedMove > 0 &&
     !exceedsSource &&
     !exceedsTarget;
+  const movementTotalPages = Math.max(1, Math.ceil(movements.length / movementPageSize));
+  const movementPageStart = movements.length === 0 ? 0 : (movementPage - 1) * movementPageSize + 1;
+  const movementPageEnd = Math.min(movements.length, movementPage * movementPageSize);
+  const paginatedMovements = useMemo(() => {
+    const start = (movementPage - 1) * movementPageSize;
+    return movements.slice(start, start + movementPageSize);
+  }, [movementPage, movementPageSize, movements]);
+
+  useEffect(() => {
+    setMovementPage(1);
+  }, [movementPageSize]);
+
+  useEffect(() => {
+    setMovementPage((prev) => Math.min(prev, movementTotalPages));
+  }, [movementTotalPages]);
 
   if (loading) {
     return (
@@ -460,8 +514,12 @@ export default function TanksPage() {
           <p className="text-pond-200/75 text-sm mt-1">
             Manage your tank setup, status and fish allocation
           </p>
+          <p className="text-xs text-pond-300 mt-1">
+            {planLabel}: {tankCountLabel} tank records used
+          </p>
         </div>
         <div className="flex items-center gap-2">
+          <CurrentPlanBadge />
           <button onClick={() => openMove()} className="btn-secondary">
             <ArrowRightLeft className="w-4 h-4" /> Move Fish
           </button>
@@ -475,6 +533,36 @@ export default function TanksPage() {
         <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4" />
           <span>{error}</span>
+        </div>
+      )}
+
+      {showUpgradeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            onClick={() => setShowUpgradeModal(false)}
+            aria-label="Close upgrade prompt"
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+          />
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-amber-400/35 bg-[#0f141b] p-5 shadow-2xl">
+            <p className="text-xs uppercase tracking-wider text-amber-200/70">Plan limit reached</p>
+            <h3 className="mt-1 text-xl font-semibold text-pond-100">Upgrade to add more tanks</h3>
+            <p className="mt-2 text-sm text-pond-200/80">
+              {upgradeModalMessage}
+            </p>
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => setShowUpgradeModal(false)}
+                className="btn-secondary w-full"
+              >
+                Close
+              </button>
+              <Link href="/settings/billing" className="btn-primary w-full text-center">
+                Go to Billing
+              </Link>
+            </div>
+          </div>
         </div>
       )}
 
@@ -537,7 +625,7 @@ export default function TanksPage() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {tanks.map((tank) => {
+        {sortedTanks.map((tank) => {
           const fillPct =
             tank.capacity > 0
               ? Math.round(
@@ -698,7 +786,7 @@ export default function TanksPage() {
         ) : (
           <>
             <div className="md:hidden divide-y divide-pond-700/20">
-              {movements.map((move) => (
+              {paginatedMovements.map((move) => (
                 <div key={move._id} className="p-4 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm text-pond-200 font-medium">{move.fromTankName} → {move.toTankName}</p>
@@ -733,7 +821,7 @@ export default function TanksPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {movements.map((move) => (
+                  {paginatedMovements.map((move) => (
                     <tr key={move._id}>
                       <td className="font-mono text-xs">
                         {new Date(move.date).toLocaleDateString("en-NG", {
@@ -767,6 +855,41 @@ export default function TanksPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+            <div className="border-t border-pond-700/20 px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-pond-200/65">
+                Showing {movementPageStart}-{movementPageEnd} of {movements.length}
+              </p>
+              <div className="flex items-center gap-2 overflow-x-auto">
+                <select
+                  className="field !w-auto !py-1.5 !px-2.5 !text-xs shrink-0"
+                  value={movementPageSize}
+                  onChange={(e) => setMovementPageSize(Number(e.target.value))}
+                >
+                  <option value={10}>10 / page</option>
+                  <option value={20}>20 / page</option>
+                  <option value={50}>50 / page</option>
+                </select>
+                <button
+                  type="button"
+                  className="btn-secondary !px-3 !py-1.5 text-xs"
+                  onClick={() => setMovementPage((p) => Math.max(1, p - 1))}
+                  disabled={movementPage <= 1}
+                >
+                  Previous
+                </button>
+                <span className="text-xs text-pond-200/75">
+                  Page {movementPage} of {movementTotalPages}
+                </span>
+                <button
+                  type="button"
+                  className="btn-secondary !px-3 !py-1.5 text-xs"
+                  onClick={() => setMovementPage((p) => Math.min(movementTotalPages, p + 1))}
+                  disabled={movementPage >= movementTotalPages}
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </>
         )}
@@ -833,7 +956,7 @@ export default function TanksPage() {
                     }
                   >
                     <option value="">Select source…</option>
-                    {tanks.map((tank) => (
+                    {sortedTanks.map((tank) => (
                       <option key={tank._id} value={tank._id}>
                         {tank.name} ({Number(tank.currentFish || 0)})
                       </option>
@@ -853,7 +976,7 @@ export default function TanksPage() {
                     }
                   >
                     <option value="">Select destination…</option>
-                    {tanks
+                    {sortedTanks
                       .filter((t) => t._id !== moveForm.fromTankId)
                       .map((tank) => (
                         <option key={tank._id} value={tank._id}>

@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Fish, Loader2, X, Calendar, Package, Search, Trash2 } from "lucide-react";
 import { weeksSince, getBatchPhase, calcSurvivalRate } from "@/lib/utils";
+import CurrentPlanBadge from "@/components/billing/CurrentPlanBadge";
+import Link from "next/link";
 
 type BatchStatus = "active" | "harvested" | "partial";
 
@@ -64,6 +66,12 @@ export default function BatchesPage() {
   const [deletingBatchId, setDeletingBatchId] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [error, setError] = useState("");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeModalMessage, setUpgradeModalMessage] = useState(
+    "You have reached your active batch limit for this plan. Upgrade your plan to create additional active batches."
+  );
+  const [planLabel, setPlanLabel] = useState("Free");
+  const [activeBatchLimit, setActiveBatchLimit] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | BatchStatus>("all");
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "name" | "survival">("newest");
@@ -94,12 +102,21 @@ export default function BatchesPage() {
   });
 
   useEffect(() => {
-    fetch("/api/batches")
-      .then(async (r) => {
-        if (!r.ok) throw new Error("Failed to load batches");
-        return r.json();
+    Promise.all([fetch("/api/batches"), fetch("/api/billing/status")])
+      .then(async ([batchesRes, billingRes]) => {
+        const batchesPayload = await batchesRes.json();
+        const billingPayload = billingRes.ok ? await billingRes.json() : null;
+
+        if (!batchesRes.ok) throw new Error("Failed to load batches");
+
+        setBatches(batchesPayload);
+        setPlanLabel(billingPayload?.planLabel || "Free");
+        setActiveBatchLimit(
+          typeof billingPayload?.limits?.maxActiveBatches === "number"
+            ? billingPayload.limits.maxActiveBatches
+            : null
+        );
       })
-      .then((b) => setBatches(b))
       .catch((e) => setError(e.message || "Unable to load batches"))
       .finally(() => setLoading(false));
   }, []);
@@ -162,7 +179,18 @@ export default function BatchesPage() {
         body: JSON.stringify(form),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload?.error || "Failed to create batch");
+      if (!res.ok) {
+        if (payload?.code === "PLAN_LIMIT_ACTIVE_BATCHES") {
+          setShowForm(false);
+          setShowUpgradeModal(true);
+          setUpgradeModalMessage(
+            payload?.error || "You have reached your active batch limit for this plan. Upgrade to add more."
+          );
+          setError("");
+          return;
+        }
+        throw new Error(payload?.error || "Failed to create batch");
+      }
       setBatches((prev) => [payload, ...prev]);
       setShowForm(false);
     } catch (err: any) {
@@ -277,7 +305,16 @@ export default function BatchesPage() {
         body: JSON.stringify({ status: "active" }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload?.error || "Failed to reopen batch");
+      if (!res.ok) {
+        if (payload?.code === "PLAN_LIMIT_ACTIVE_BATCHES") {
+          setShowUpgradeModal(true);
+          setUpgradeModalMessage(
+            payload?.error || "You have reached your active batch limit for this plan. Upgrade to add more."
+          );
+          return;
+        }
+        throw new Error(payload?.error || "Failed to reopen batch");
+      }
       setBatches((prev) => prev.map((b) => (b._id === batch._id ? payload : b)));
     } catch (err: any) {
       setError(err?.message || "Failed to reopen batch");
@@ -317,6 +354,7 @@ export default function BatchesPage() {
     Finisher: "badge-amber",
     "Harvest Ready": "badge-green",
   };
+  const activeBatchCount = batches.filter((batch) => batch.status === "active").length;
 
   if (loading) {
     return (
@@ -332,15 +370,55 @@ export default function BatchesPage() {
         <div>
           <h1 className="font-display text-2xl font-semibold text-pond-100">Batches</h1>
           <p className="text-pond-200/75 text-sm mt-1">Manage your production batches</p>
+          {activeBatchLimit !== null ? (
+            <p className="text-xs text-pond-300 mt-1">
+              {planLabel}: {activeBatchCount}/{activeBatchLimit} active batches used
+            </p>
+          ) : (
+            <p className="text-xs text-pond-300 mt-1">{planLabel}: Unlimited active batches</p>
+          )}
         </div>
-        <button onClick={() => setShowForm(true)} className="btn-primary">
-          <Plus className="w-4 h-4" /> New Batch
-        </button>
+        <div className="flex items-center gap-2">
+          <CurrentPlanBadge />
+          <button onClick={() => setShowForm(true)} className="btn-primary">
+            <Plus className="w-4 h-4" /> New Batch
+          </button>
+        </div>
       </div>
 
       {error && (
         <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10">
           {error}
+        </div>
+      )}
+
+      {showUpgradeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            onClick={() => setShowUpgradeModal(false)}
+            aria-label="Close upgrade prompt"
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+          />
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-amber-400/35 bg-[#0f141b] p-5 shadow-2xl">
+            <p className="text-xs uppercase tracking-wider text-amber-200/70">Plan limit reached</p>
+            <h3 className="mt-1 text-xl font-semibold text-pond-100">Upgrade to create more active batches</h3>
+            <p className="mt-2 text-sm text-pond-200/80">
+              {upgradeModalMessage}
+            </p>
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => setShowUpgradeModal(false)}
+                className="btn-secondary w-full"
+              >
+                Close
+              </button>
+              <Link href="/settings/billing" className="btn-primary w-full text-center">
+                Go to Billing
+              </Link>
+            </div>
+          </div>
         </div>
       )}
 

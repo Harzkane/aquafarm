@@ -5,6 +5,9 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { DailyLog } from "@/models/DailyLog";
 import { Batch } from "@/models/Batch";
+import { User } from "@/models/User";
+import { getPlanConfig } from "@/lib/plans";
+import { recordAuditEvent } from "@/lib/audit";
 
 type WaterPayload = {
   batchId: string;
@@ -83,10 +86,18 @@ export async function GET(req: NextRequest) {
 
   const userId = (session.user as any).id;
   const { searchParams } = new URL(req.url);
-  const limit = Math.max(1, Math.min(300, Number(searchParams.get("limit") || 100)));
+  const requestedLimit = Number(searchParams.get("limit") || 100);
   const batchId = searchParams.get("batchId");
 
   await connectDB();
+  const user = await User.findById(userId).select("plan").lean<any>();
+  const plan = getPlanConfig(user?.plan);
+  const maxLimit = plan.reportHistoryDays ? 300 : 5000;
+  const fallbackLimit = plan.reportHistoryDays ? 100 : 1000;
+  const limit = Math.max(
+    1,
+    Math.min(maxLimit, Number.isFinite(requestedLimit) ? Math.trunc(requestedLimit) : fallbackLimit)
+  );
 
   const query: Record<string, any> = {
     userId,
@@ -98,6 +109,9 @@ export async function GET(req: NextRequest) {
     ],
   };
   if (batchId && Types.ObjectId.isValid(batchId)) query.batchId = batchId;
+  if (plan.reportHistoryDays) {
+    query.date = { $gte: new Date(Date.now() - plan.reportHistoryDays * 24 * 60 * 60 * 1000) };
+  }
 
   const logs = await DailyLog.find(query)
     .sort({ date: -1, createdAt: -1 })
@@ -141,6 +155,7 @@ export async function POST(req: NextRequest) {
   });
 
   let log;
+  let auditAction: "create" | "update" = "create";
   if (existing) {
     existing.feedSession = payload.feedSession;
     existing.tankName = payload.tankName || existing.tankName || "";
@@ -154,6 +169,7 @@ export async function POST(req: NextRequest) {
     existing.date = date;
     await existing.save();
     log = existing;
+    auditAction = "update";
   } else {
     log = await DailyLog.create({
       userId,
@@ -173,6 +189,26 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  await recordAuditEvent({
+    sessionUser: session.user,
+    action: auditAction,
+    resource: "water_quality",
+    resourceId: log._id.toString(),
+    summary: `${auditAction === "create" ? "Recorded" : "Updated"} water quality for ${batch.name}`,
+    meta: {
+      batchId: batch._id.toString(),
+      batchName: batch.name,
+      feedSession: payload.feedSession || "morning",
+      tankName: payload.tankName || "",
+      ph: payload.ph ?? null,
+      ammonia: payload.ammonia ?? null,
+      temperature: payload.temperature ?? null,
+      dissolvedO2: payload.dissolvedO2 ?? null,
+      waterChanged: Boolean(payload.waterChanged),
+      waterChangePct: Number(payload.waterChangePct || 0),
+      date: date.toISOString(),
+    },
+  }).catch(() => {});
+
   return NextResponse.json(log, { status: 201 });
 }
-

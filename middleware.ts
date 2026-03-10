@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getToken } from "next-auth/jwt";
 
 type RateState = {
   count: number;
@@ -42,7 +43,29 @@ function withSecurityHeaders(res: NextResponse) {
   return res;
 }
 
-export function middleware(req: NextRequest) {
+const FREE_LOCKED_PAGE_PREFIXES = ["/financials", "/harvest", "/playbook", "/calendar"];
+const FREE_LOCKED_API_PREFIXES = ["/api/financials", "/api/harvest", "/api/calendar/events"];
+const COMMERCIAL_OWNER_PAGE_PREFIXES = ["/settings/staff", "/settings/audit"];
+const COMMERCIAL_OWNER_API_PREFIXES = ["/api/staff", "/api/audit"];
+const STAFF_BLOCKED_PAGE_PREFIXES = ["/settings/billing"];
+
+function isLockedForFree(pathname: string) {
+  if (FREE_LOCKED_PAGE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return true;
+  if (FREE_LOCKED_API_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return true;
+  return false;
+}
+
+function isCommercialOwnerOnly(pathname: string) {
+  if (COMMERCIAL_OWNER_PAGE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return true;
+  if (COMMERCIAL_OWNER_API_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return true;
+  return false;
+}
+
+function isStaffBlocked(pathname: string) {
+  return STAFF_BLOCKED_PAGE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
   const method = req.method.toUpperCase();
 
@@ -78,10 +101,77 @@ export function middleware(req: NextRequest) {
     return withSecurityHeaders(res);
   }
 
+  if (isLockedForFree(pathname)) {
+    const token = await getToken({
+      req,
+      secret: process.env.NEXTAUTH_SECRET,
+    });
+    const plan = (token as any)?.plan || "free";
+
+    if (plan === "free") {
+      if (pathname.startsWith("/api/")) {
+        return withSecurityHeaders(
+          NextResponse.json(
+            {
+              error: "This feature is available on paid plans. Upgrade to continue.",
+              code: "PLAN_FEATURE_LOCKED",
+            },
+            { status: 403 }
+          )
+        );
+      }
+
+      const redirectUrl = req.nextUrl.clone();
+      redirectUrl.pathname = "/plans";
+      redirectUrl.searchParams.set("upgrade", "1");
+      return withSecurityHeaders(NextResponse.redirect(redirectUrl));
+    }
+  }
+
+  if (isCommercialOwnerOnly(pathname)) {
+    const token = await getToken({
+      req,
+      secret: process.env.NEXTAUTH_SECRET,
+    });
+    const plan = (token as any)?.plan || "free";
+    const role = (token as any)?.role || "owner";
+    const allowed = plan === "commercial" && role === "owner";
+
+    if (!allowed) {
+      if (pathname.startsWith("/api/")) {
+        return withSecurityHeaders(
+          NextResponse.json(
+            {
+              error: "This feature is available for Commercial account owners only.",
+              code: "PLAN_FEATURE_LOCKED",
+            },
+            { status: 403 }
+          )
+        );
+      }
+
+      const redirectUrl = req.nextUrl.clone();
+      redirectUrl.pathname = "/settings/billing";
+      return withSecurityHeaders(NextResponse.redirect(redirectUrl));
+    }
+  }
+
+  if (isStaffBlocked(pathname)) {
+    const token = await getToken({
+      req,
+      secret: process.env.NEXTAUTH_SECRET,
+    });
+    const role = (token as any)?.role || "owner";
+    if (role === "staff") {
+      const redirectUrl = req.nextUrl.clone();
+      redirectUrl.pathname = "/dashboard";
+      return withSecurityHeaders(NextResponse.redirect(redirectUrl));
+    }
+  }
+
   return withSecurityHeaders(NextResponse.next());
 }
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
-

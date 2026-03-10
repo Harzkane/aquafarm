@@ -65,6 +65,8 @@ export default function FeedingPage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [showEntryForm, setShowEntryForm] = useState(false);
+  const [isFreePlan, setIsFreePlan] = useState(false);
+  const communitySupportHref = process.env.NEXT_PUBLIC_COMMUNITY_SUPPORT_URL || "";
 
   const [form, setForm] = useState<FormState>(initialForm);
   const [editingLog, setEditingLog] = useState<LogEntry | null>(null);
@@ -86,14 +88,16 @@ export default function FeedingPage() {
     setLoading(true);
     setError("");
     try {
-      const [batchesRes, logsRes, tanksRes] = await Promise.all([
+      const [batchesRes, logsRes, tanksRes, billingRes] = await Promise.all([
         fetch("/api/batches"),
-        fetch("/api/logs?limit=100"),
+        fetch("/api/logs?limit=5000"),
         fetch("/api/tanks"),
+        fetch("/api/billing/status"),
       ]);
       const batchesPayload = await batchesRes.json();
       const logsPayload = await logsRes.json();
       const tanksPayload = await tanksRes.json();
+      const billingPayload = billingRes.ok ? await billingRes.json() : null;
 
       if (!batchesRes.ok) throw new Error(batchesPayload?.error || "Failed to load batches");
       if (!logsRes.ok) throw new Error(logsPayload?.error || "Failed to load logs");
@@ -102,6 +106,7 @@ export default function FeedingPage() {
       setBatches(batchesPayload);
       setLogs(logsPayload);
       setTankOptions(tanksPayload || []);
+      setIsFreePlan((billingPayload?.plan || "free") === "free");
     } catch (err: any) {
       setError(err?.message || "Failed to load daily logs");
     } finally {
@@ -280,6 +285,22 @@ export default function FeedingPage() {
           <Plus className="w-4 h-4" /> Today&apos;s Entry
         </button>
       </div>
+
+      {isFreePlan ? (
+        <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          <p>Starter Free includes Daily Logs with a 30-day history window.</p>
+          {communitySupportHref ? (
+            <a
+              href={communitySupportHref}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex text-xs text-amber-200 underline underline-offset-4 hover:text-amber-100"
+            >
+              Need help? Join Community support
+            </a>
+          ) : null}
+        </div>
+      ) : null}
 
       {error && (
         <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10">{error}</div>

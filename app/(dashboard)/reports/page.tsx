@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, AlertTriangle, TrendingUp, Droplets, Fish } from "lucide-react";
+import { Loader2, AlertTriangle, TrendingUp, Droplets, Fish, Download } from "lucide-react";
 import { formatNaira } from "@/lib/utils";
 import { BarChart, Bar, ResponsiveContainer, Tooltip, CartesianGrid, XAxis, YAxis, LineChart, Line } from "recharts";
+import CurrentPlanBadge from "@/components/billing/CurrentPlanBadge";
+import { formatDateNg } from "@/lib/dates";
 
 type Summary = {
   totalRevenue: number;
@@ -31,12 +33,51 @@ type MonthlyRow = {
   feed: number;
 };
 
+type BatchPerformanceRow = {
+  batchId: string;
+  batchName: string;
+  status: string;
+  initialCount: number;
+  currentCount: number;
+  feedKg: number;
+  mortality: number;
+  waterRiskLogs: number;
+  revenue: number;
+  harvestedKg: number;
+  survivalRate: number;
+  feedPerFishKg: number;
+  avgPricePerKg: number;
+};
+
+type ChannelPerformanceRow = {
+  channel: string;
+  revenue: number;
+  weightKg: number;
+  fishSold: number;
+  records: number;
+};
+
+type AdvancedPayload = {
+  batchPerformance: BatchPerformanceRow[];
+  channelPerformance: ChannelPerformanceRow[];
+  riskHotspots: BatchPerformanceRow[];
+  generatedAt: string;
+  batchesAnalyzed: number;
+};
+
 export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [range, setRange] = useState<"30d" | "90d" | "all">("90d");
+  const [planRestricted, setPlanRestricted] = useState(false);
+  const [canExport, setCanExport] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [granularity, setGranularity] = useState<"daily" | "weekly" | "monthly">("monthly");
+  const [canAdvancedReporting, setCanAdvancedReporting] = useState(false);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [monthly, setMonthly] = useState<MonthlyRow[]>([]);
+  const [advanced, setAdvanced] = useState<AdvancedPayload | null>(null);
+  const isFreeReports = !canExport;
 
   useEffect(() => {
     let active = true;
@@ -48,8 +89,14 @@ export default function ReportsPage() {
         const payload = await res.json();
         if (!res.ok) throw new Error(payload?.error || "Failed to load reports");
         if (!active) return;
+        setPlanRestricted(Boolean(payload?.planRestricted));
+        setCanExport(Boolean(payload?.canExport));
+        setCanAdvancedReporting(Boolean(payload?.canAdvancedReporting));
+        setGranularity((payload?.granularity as any) || "monthly");
+        if (payload?.range && payload.range !== range) setRange(payload.range);
         setSummary(payload?.summary || null);
         setMonthly(Array.isArray(payload?.monthly) ? payload.monthly : []);
+        setAdvanced(payload?.advanced || null);
       } catch (err: any) {
         if (active) setError(err?.message || "Unable to load reports");
       } finally {
@@ -67,6 +114,35 @@ export default function ReportsPage() {
     if (summary.net === 0) return "Break-even";
     return "Investment phase";
   }, [summary]);
+
+  async function exportCsv() {
+    if (!canExport) return;
+    setExporting(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/reports/export?range=${range}`);
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.error || "Failed to export report");
+      }
+      const blob = await res.blob();
+      const contentDisposition = res.headers.get("content-disposition") || "";
+      const match = contentDisposition.match(/filename=\"?([^\";]+)\"?/i);
+      const filename = match?.[1] || `aquafarm-report-${range}.csv`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err?.message || "Failed to export report");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -87,22 +163,44 @@ export default function ReportsPage() {
           <h1 className="font-display text-2xl font-semibold text-pond-100">Reports</h1>
           <p className="text-pond-200/75 text-sm mt-1">Cross-module performance snapshot (production, health, finances, feed)</p>
         </div>
-        <div className="flex rounded-xl p-1" style={{ background: "rgba(12, 12, 14,0.6)" }}>
-          {(["30d", "90d", "all"] as const).map((r) => (
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <CurrentPlanBadge />
+          <button
+            type="button"
+            className="btn-secondary !px-3.5 !py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+            onClick={exportCsv}
+            disabled={!canExport || exporting}
+            title={!canExport ? "Export is available on Pro and Commercial plans" : "Export report as CSV"}
+          >
+            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {exporting ? "Exporting..." : "Export CSV"}
+          </button>
+          <div className="flex rounded-xl p-1" style={{ background: "rgba(12, 12, 14,0.6)" }}>
+          {(["30d", "90d", "all"] as const).map((r) => {
+            const lockedForFree = isFreeReports && r !== "30d";
+            return (
             <button
               key={r}
               type="button"
               onClick={() => setRange(r)}
+              disabled={lockedForFree}
               className={`px-3 py-2 text-sm rounded-lg transition-all ${range === r ? "text-white" : "text-pond-200/75 hover:text-pond-300"}`}
               style={range === r ? { background: "linear-gradient(135deg,#4b5563,#374151)" } : {}}
+              title={lockedForFree ? "Upgrade to Pro to unlock 90-day and all-time reports" : undefined}
             >
               {r === "all" ? "All Time" : r.toUpperCase()}
             </button>
-          ))}
+          )})}
+          </div>
         </div>
       </div>
 
       {error && <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10">{error}</div>}
+      {planRestricted ? (
+        <div className="rounded-xl px-4 py-3 text-sm border border-amber-400/30 bg-amber-500/10 text-amber-200">
+          Free plan is limited to 30-day report history. Upgrade for 90-day and all-time reports.
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="stat-card">
@@ -131,7 +229,9 @@ export default function ReportsPage() {
         <div className="chart-wrap">
           <div className="flex items-center gap-2 mb-3">
             <TrendingUp className="w-4 h-4 text-pond-300" />
-            <h2 className="section-title !text-base">Revenue vs Expense (Monthly)</h2>
+            <h2 className="section-title !text-base">
+              Revenue vs Expense ({granularity === "daily" ? "Daily" : granularity === "weekly" ? "Weekly" : "Monthly"})
+            </h2>
           </div>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={monthly}>
@@ -148,7 +248,9 @@ export default function ReportsPage() {
         <div className="chart-wrap">
           <div className="flex items-center gap-2 mb-3">
             <Droplets className="w-4 h-4 text-water-300" />
-            <h2 className="section-title !text-base">Feed vs Mortality Trend</h2>
+            <h2 className="section-title !text-base">
+              Feed vs Mortality Trend ({granularity === "daily" ? "Daily" : granularity === "weekly" ? "Weekly" : "Monthly"})
+            </h2>
           </div>
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={monthly}>
@@ -185,6 +287,82 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {canAdvancedReporting && advanced ? (
+        <div className="glass-card p-5 space-y-4">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <h2 className="section-title !text-base">Advanced Reporting (Commercial)</h2>
+            <p className="text-xs text-pond-200/65">
+              {advanced.batchesAnalyzed} batches · generated {formatDateNg(advanced.generatedAt)}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div className="rounded-xl border border-pond-700/30 bg-black/20 p-4 lg:col-span-2">
+              <p className="text-xs uppercase tracking-wider text-pond-300 mb-2">Batch Performance</p>
+              <div className="overflow-x-auto">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Batch</th>
+                      <th>Status</th>
+                      <th>Survival</th>
+                      <th>Feed (kg)</th>
+                      <th>Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {advanced.batchPerformance.slice(0, 8).map((row) => (
+                      <tr key={row.batchId}>
+                        <td className="text-xs">{row.batchName}</td>
+                        <td className="text-xs capitalize">{row.status}</td>
+                        <td className="font-mono text-xs">{row.survivalRate.toFixed(1)}%</td>
+                        <td className="font-mono text-xs">{row.feedKg.toFixed(1)}</td>
+                        <td className="font-mono text-xs text-success">{formatNaira(row.revenue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-pond-700/30 bg-black/20 p-4">
+              <p className="text-xs uppercase tracking-wider text-pond-300 mb-2">Risk Hotspots</p>
+              {advanced.riskHotspots.length === 0 ? (
+                <p className="text-sm text-pond-200/70">No water-risk hotspots in selected range.</p>
+              ) : (
+                <div className="space-y-2">
+                  {advanced.riskHotspots.slice(0, 6).map((row) => (
+                    <div key={`risk-${row.batchId}`} className="rounded-lg border border-red-400/20 bg-red-500/5 px-3 py-2">
+                      <p className="text-sm text-pond-100">{row.batchName}</p>
+                      <p className="text-xs text-red-200 mt-0.5">{row.waterRiskLogs} risk logs</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 p-4">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-2">Channel Performance</p>
+            {advanced.channelPerformance.length === 0 ? (
+              <p className="text-sm text-pond-200/70">No harvest channel data in selected range.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                {advanced.channelPerformance.map((channel) => (
+                  <div key={channel.channel} className="rounded-lg border border-pond-700/30 bg-black/20 px-3 py-2.5">
+                    <p className="text-xs uppercase tracking-wider text-pond-300">{channel.channel}</p>
+                    <p className="text-sm text-success font-mono mt-1">{formatNaira(channel.revenue)}</p>
+                    <p className="text-xs text-pond-200/70 mt-1">
+                      {channel.records} sale{channel.records > 1 ? "s" : ""} · {channel.weightKg.toFixed(1)}kg
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
       {summary.waterRiskLogs > 0 && (
         <div className="glass-card p-4 flex items-start gap-3 border border-red-400/25">
           <AlertTriangle className="w-4 h-4 text-danger mt-0.5" />
@@ -203,4 +381,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-

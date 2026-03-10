@@ -62,6 +62,8 @@ export default function MortalityPage() {
   const [tankOptions, setTankOptions] = useState<TankOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isFreePlan, setIsFreePlan] = useState(false);
+  const communitySupportHref = process.env.NEXT_PUBLIC_COMMUNITY_SUPPORT_URL || "";
 
   const [dateRange, setDateRange] = useState<"7d" | "30d" | "90d" | "all">("30d");
   const [batchFilter, setBatchFilter] = useState<string>("all");
@@ -85,14 +87,16 @@ export default function MortalityPage() {
     setLoading(true);
     setError("");
     try {
-      const [logsRes, batchesRes, tanksRes] = await Promise.all([
-        fetch("/api/logs?limit=300"),
+      const [logsRes, batchesRes, tanksRes, billingRes] = await Promise.all([
+        fetch("/api/logs?limit=5000"),
         fetch("/api/batches"),
         fetch("/api/tanks"),
+        fetch("/api/billing/status"),
       ]);
       const logsPayload = await logsRes.json();
       const batchesPayload = await batchesRes.json();
       const tanksPayload = await tanksRes.json();
+      const billingPayload = billingRes.ok ? await billingRes.json() : null;
 
       if (!logsRes.ok) throw new Error(logsPayload?.error || "Failed to load mortality logs");
       if (!batchesRes.ok) throw new Error(batchesPayload?.error || "Failed to load batches");
@@ -102,6 +106,7 @@ export default function MortalityPage() {
       setLogs(mortalityOnly);
       setBatches(batchesPayload);
       setTankOptions(tanksPayload || []);
+      setIsFreePlan((billingPayload?.plan || "free") === "free");
     } catch (err: any) {
       setError(err?.message || "Failed to load mortality data");
     } finally {
@@ -233,6 +238,12 @@ export default function MortalityPage() {
     setPage(1);
   }, [dateRange, batchFilter, causeFilter, search]);
 
+  useEffect(() => {
+    if (isFreePlan && (dateRange === "90d" || dateRange === "all")) {
+      setDateRange("30d");
+    }
+  }, [dateRange, isFreePlan]);
+
   const totalPages = Math.max(1, Math.ceil(filteredLogs.length / pageSize));
   const paginatedLogs = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -268,6 +279,22 @@ export default function MortalityPage() {
         <p className="text-pond-200/75 text-sm mt-1">Track and analyse fish deaths to improve survival rate</p>
       </div>
 
+      {isFreePlan ? (
+        <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          <p>Starter Free keeps mortality history to the last 30 days.</p>
+          {communitySupportHref ? (
+            <a
+              href={communitySupportHref}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex text-xs text-amber-200 underline underline-offset-4 hover:text-amber-100"
+            >
+              Need help? Join Community support
+            </a>
+          ) : null}
+        </div>
+      ) : null}
+
       {error && (
         <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4" />
@@ -279,8 +306,8 @@ export default function MortalityPage() {
         <select className="field" value={dateRange} onChange={(e) => setDateRange(e.target.value as any)}>
           <option value="7d">Last 7 days</option>
           <option value="30d">Last 30 days</option>
-          <option value="90d">Last 90 days</option>
-          <option value="all">All time</option>
+          {!isFreePlan ? <option value="90d">Last 90 days</option> : null}
+          {!isFreePlan ? <option value="all">All time</option> : null}
         </select>
         <select className="field" value={batchFilter} onChange={(e) => setBatchFilter(e.target.value)}>
           <option value="all">All batches</option>

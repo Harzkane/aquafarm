@@ -4,6 +4,9 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Tank } from "@/models/Tank";
 import { Types } from "mongoose";
+import { User } from "@/models/User";
+import { getPlanConfig } from "@/lib/plans";
+import { recordAuditEvent } from "@/lib/audit";
 
 const TANK_TYPES = new Set(["tarpaulin", "half-cut", "concrete", "fiberglass"]);
 const STATUSES = new Set(["active", "empty", "cleaning", "quarantine"]);
@@ -105,6 +108,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid user session" }, { status: 400 });
     }
 
+    const user = await User.findById(userId).select("plan").lean<any>();
+    const plan = getPlanConfig(user?.plan);
+    if (plan.maxTanks !== null) {
+      const tankCount = await Tank.countDocuments({ userId });
+      if (tankCount >= plan.maxTanks) {
+        return NextResponse.json(
+          {
+            error: `Your ${plan.label} plan allows up to ${plan.maxTanks} tanks. Upgrade to add more.`,
+            code: "PLAN_LIMIT_TANKS",
+            limit: plan.maxTanks,
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     const escapedName = escapeRegex(validated.value.name);
     const existing = await Tank.findOne({
       userId,
@@ -118,6 +137,14 @@ export async function POST(req: NextRequest) {
       userId,
       workingVolume,
     });
+    await recordAuditEvent({
+      sessionUser: session.user,
+      action: "create",
+      resource: "tank",
+      resourceId: tank._id.toString(),
+      summary: `Created tank ${tank.name}`,
+      meta: { capacity: tank.capacity, status: tank.status },
+    }).catch(() => {});
     return NextResponse.json(tank, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Failed to create tank" }, { status: 500 });
