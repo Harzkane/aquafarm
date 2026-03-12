@@ -38,6 +38,7 @@ All routes are under `app/api/**`.
 - Alerts:
   - `GET /api/alerts`
   - `POST /api/alerts/:id/ack`
+  - `GET|PATCH /api/alerts/preferences`
 
 ## SaaS / Billing
 - `POST /api/billing/checkout`
@@ -74,6 +75,10 @@ Routes:
     - `keepDays` (30..730)
     - `batchSize` (50..1000)
 - `POST /api/internal/cron/alerts-evaluate`
+  - Query:
+    - `dryRun=1` optional
+    - `limit` (1..200)
+- `POST /api/internal/cron/alerts-dispatch`
   - Query:
     - `dryRun=1` optional
     - `limit` (1..200)

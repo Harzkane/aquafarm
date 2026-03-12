@@ -6,6 +6,7 @@ const UserSchema = new Schema({
   password:  { type: String, required: true },
   farmName:  { type: String, default: "My Catfish Farm" },
   location:  { type: String, default: "Abuja, Nigeria" },
+  phone:     { type: String, default: "" },
   role:      { type: String, enum: ["owner", "staff"], default: "owner" },
   farmOwnerId: { type: Schema.Types.ObjectId, ref: "User", default: null },
   isActive:  { type: Boolean, default: true },
@@ -34,6 +35,10 @@ const UserSchema = new Schema({
   cancellationRequestedAt: Date,
   canceledAt: Date,
   scheduledPlan: { type: String, enum: ["", "free", "pro", "commercial"], default: "" },
+  alertPrefs: {
+    whatsappCritical: { type: Boolean, default: true },
+    emailCritical: { type: Boolean, default: true },
+  },
   createdAt: { type: Date, default: Date.now },
 });
 

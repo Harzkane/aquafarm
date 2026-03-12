@@ -119,9 +119,16 @@ Use an external scheduler (for example `cron-job.org`) to call:
 - `POST /api/internal/cron/billing-reconcile?limit=120`
 - `POST /api/internal/cron/billing-events-prune?keepDays=180&batchSize=500`
 - `POST /api/internal/cron/alerts-evaluate?limit=50`
+- `POST /api/internal/cron/alerts-dispatch?limit=50`
 
 Include header:
 - `Authorization: Bearer <CRON_SECRET>`
+
+Optional outbound alert env (WhatsApp):
+- `ALERT_WHATSAPP_WEBHOOK_URL`
+- `ALERT_WHATSAPP_WEBHOOK_TOKEN`
+- `ALERTS_WHATSAPP_TO`
+- `ALERT_OUTBOUND_COOLDOWN_MINUTES`
 
 ## Project Structure
 ```bash
@@ -174,3 +181,5 @@ aquafarm/
   - `GET /api/alerts?counts=1` (active counts by severity)
   - `GET /api/alerts?refresh=1` (recompute + sync for current farm)
   - `POST /api/alerts/:id/ack` (dismiss one alert)
+- Outbound dispatch:
+  - `POST /api/internal/cron/alerts-dispatch` (critical alerts to WhatsApp webhook adapter with cooldown)

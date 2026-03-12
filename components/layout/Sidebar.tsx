@@ -27,6 +27,7 @@ const NAV = [
   { href: "/reports",     icon: FileBarChart2,    label: "Reports"         },
   { href: "/plans",       icon: CircleDollarSign, label: "Plans & ROI"     },
   { href: "/settings/billing", icon: CreditCard,  label: "Billing"         },
+  { href: "/settings/alerts", icon: Bell,         label: "Alert Channels"  },
   { href: "/settings/staff", icon: Users, label: "Staff Access"            },
   { href: "/settings/audit", icon: ShieldCheck, label: "Operations Audit"  },
   { href: "/settings/ops", icon: ActivitySquare, label: "Ops Monitor"      },
@@ -119,6 +120,7 @@ export default function Sidebar() {
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {NAV.map(({ href, icon: Icon, label }) => {
           if (href === "/settings/billing" && currentRole === "staff") return null;
+          if (href === "/settings/alerts" && currentRole === "staff") return null;
           if (href === "/settings/staff" && !(currentPlan === "commercial" && currentRole === "owner")) return null;
           if (href === "/settings/audit" && !(currentPlan === "commercial" && currentRole === "owner")) return null;
           if (href === "/settings/ops" && !(currentPlan === "commercial" && currentRole === "owner")) return null;

@@ -28,7 +28,7 @@
   - Payload validators (`lib/validators/*`)
 - Data models:
   - `User`, `Batch`, `Tank`, `DailyLog`, `Financial`, `FeedInventory`
-  - `TankMovement`, `CalendarEvent`, `AuditLog`, `BillingEvent`, `CronRun`, `AlertNotification`
+  - `TankMovement`, `CalendarEvent`, `AuditLog`, `BillingEvent`, `CronRun`, `AlertNotification`, `AlertDelivery`
 
 ## Data Ownership Model (Multi-Tenancy)
 - Owners are tenant roots.
@@ -63,6 +63,7 @@
   - Hourly billing reconcile
   - Daily billing-event prune
   - Periodic alert evaluation (`alerts-evaluate`)
+  - Periodic outbound dispatch (`alerts-dispatch`) for critical alerts
 - Internal cron routes (`/api/internal/cron/*`) protected by `CRON_SECRET`.
 - `CronRun` model stores run summaries and failures.
 
@@ -77,6 +78,7 @@
   - `POST /api/alerts/:id/ack` to dismiss an alert.
 - Scheduling:
   - `/api/internal/cron/alerts-evaluate` updates alerts in bounded batches for Vercel-safe execution.
+  - `/api/internal/cron/alerts-dispatch` sends outbound notifications (WhatsApp webhook adapter) with cooldown + delivery logs.
 
 ## Transaction Strategy
 - Critical multi-document writes use `runAtomic`:

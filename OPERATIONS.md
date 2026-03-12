@@ -39,6 +39,8 @@ Use an external scheduler (for example `cron-job.org`):
   - `POST /api/internal/cron/billing-events-prune?keepDays=180&batchSize=500`
 - Alert evaluation (recommended every 30 minutes):
   - `POST /api/internal/cron/alerts-evaluate?limit=50`
+- Alert outbound dispatch (recommended every 15 minutes):
+  - `POST /api/internal/cron/alerts-dispatch?limit=50`
 
 Note:
 - Internal cron routes require header:
@@ -51,9 +53,11 @@ Note:
    - Call `/api/internal/cron/billing-events-prune?dryRun=1&keepDays=180&batchSize=200`
 3. Alerts dry run:
    - Call `/api/internal/cron/alerts-evaluate?dryRun=1&limit=20`
-4. Validate outputs:
+4. Dispatch dry run:
+   - Call `/api/internal/cron/alerts-dispatch?dryRun=1&limit=20`
+5. Validate outputs:
    - Check `/settings/ops` or `/api/ops/cron-runs`
-5. Run live once if dry run is healthy.
+6. Run live once if dry run is healthy.
 
 ## Ops Monitoring
 - UI:
@@ -69,6 +73,7 @@ Key indicators:
 - Candidate/updated counts for reconcile
 - Deleted counts for prune
 - Active/resolved counts for alert evaluation
+- Sent/failed/skipped counts for alert dispatch
 
 ## Incident Triage
 If cron failures appear:

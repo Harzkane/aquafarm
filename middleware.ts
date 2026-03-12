@@ -95,7 +95,7 @@ const FREE_LOCKED_PAGE_PREFIXES = ["/financials", "/harvest", "/playbook", "/cal
 const FREE_LOCKED_API_PREFIXES = ["/api/financials", "/api/harvest", "/api/calendar/events"];
 const COMMERCIAL_OWNER_PAGE_PREFIXES = ["/settings/staff", "/settings/audit", "/settings/ops"];
 const COMMERCIAL_OWNER_API_PREFIXES = ["/api/staff", "/api/audit", "/api/ops"];
-const STAFF_BLOCKED_PAGE_PREFIXES = ["/settings/billing"];
+const STAFF_BLOCKED_PAGE_PREFIXES = ["/settings/billing", "/settings/alerts"];
 
 function isLockedForFree(pathname: string) {
   if (FREE_LOCKED_PAGE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return true;
