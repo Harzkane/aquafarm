@@ -1,48 +1,140 @@
-05:58:35.322 Running build in Washington, D.C., USA (East) – iad1
-05:58:35.322 Build machine configuration: 2 cores, 8 GB
-05:58:35.466 Cloning github.com/Harzkane/aquafarm (Branch: main, Commit: bf3e09b)
-05:58:36.605 Cloning completed: 1.139s
-05:58:37.431 Restored build cache from previous deployment (ieGLCL6dc5hD7R85JhnELveV5oRj)
-05:58:38.410 Running "vercel build"
-05:58:38.985 Vercel CLI 50.28.0
-05:58:39.290 Installing dependencies...
-05:58:40.568 
-05:58:40.570 up to date in 1s
-05:58:40.570 
-05:58:40.571 156 packages are looking for funding
-05:58:40.571   run `npm fund` for details
-05:58:40.650 Detected Next.js version: 14.2.5
-05:58:40.658 Running "npm run build"
-05:58:40.766 
-05:58:40.767 > aquafarm@0.1.0 build
-05:58:40.767 > next build
-05:58:40.767 
-05:58:41.443   ▲ Next.js 14.2.5
-05:58:41.444 
-05:58:41.466    Creating an optimized production build ...
-05:58:57.068  ✓ Compiled successfully
-05:58:57.069    Linting and checking validity of types ...
-05:59:10.457    Collecting page data ...
-05:59:12.471    Generating static pages (0/42) ...
-05:59:13.199    Generating static pages (10/42) 
-05:59:13.488    Generating static pages (20/42) 
-05:59:14.266    Generating static pages (31/42) 
-05:59:14.591  ⨯ useSearchParams() should be wrapped in a suspense boundary at page "/plans". Read more: https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout
-05:59:14.595     at o (/vercel/path0/.next/server/chunks/4466.js:1:11134)
-05:59:14.596     at s (/vercel/path0/.next/server/chunks/4466.js:1:22131)
-05:59:14.596     at N (/vercel/path0/.next/server/app/plans/page.js:11:1563)
-05:59:14.597     at nj (/vercel/path0/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:46251)
-05:59:14.597     at nM (/vercel/path0/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:47571)
-05:59:14.597     at nN (/vercel/path0/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:64546)
-05:59:14.598     at nI (/vercel/path0/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:47010)
-05:59:14.598     at nM (/vercel/path0/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:47717)
-05:59:14.599     at nM (/vercel/path0/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:61546)
-05:59:14.599     at nN (/vercel/path0/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:64546)
-05:59:14.600 
-05:59:14.600 Error occurred prerendering page "/plans". Read more: https://nextjs.org/docs/messages/prerender-error
-05:59:14.600 
-05:59:14.602 
-05:59:14.602 > Export encountered errors on following paths:
-05:59:14.602 	/plans/page: /plans
-05:59:14.602  ✓ Generating static pages (42/42)
-05:59:14.636 Error: Command "npm run build" exited with 1
+❯ clear
+❯ npm run dev
+
+> aquafarm@0.1.0 dev
+> next dev
+
+  ▲ Next.js 14.2.5
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 32.9s
+ ✓ Compiled /middleware in 331ms (172 modules)
+ ○ Compiling /api/auth/[...nextauth] ...
+ ✓ Compiled /api/auth/[...nextauth] in 753ms (269 modules)
+ GET /api/auth/session 200 in 1303ms
+ ○ Compiling /settings/ops ...
+ ✓ Compiled /settings/ops in 2.6s (919 modules)
+ ✓ Compiled in 550ms (345 modules)
+ GET /settings/ops 200 in 3153ms
+ POST /api/auth/_log 200 in 30ms
+ GET /api/auth/session 200 in 54ms
+ GET /api/auth/session 200 in 57ms
+ POST /api/auth/_log 200 in 13ms
+ ○ Compiling /manifest.webmanifest ...
+ ✓ Compiled /manifest.webmanifest in 1066ms (605 modules)
+ GET /manifest.webmanifest 200 in 1292ms
+ ○ Compiling /api/alerts ...
+ ✓ Compiled /api/auth/[...nextauth] in 2.9s (306 modules)
+ ✓ Compiled (311 modules)
+ GET /api/auth/session 200 in 4217ms
+ GET /api/auth/session 200 in 3094ms
+ GET /api/alerts?limit=5&counts=1 200 in 3936ms
+ GET /api/alerts?limit=5&counts=1 200 in 5630ms
+ GET /api/ops/cron-runs?limit=120 200 in 3982ms
+ GET /api/ops/cron-runs?limit=120 200 in 5137ms
+ GET /api/auth/session 200 in 105ms
+ ○ Compiling /api/ops/cron-health ...
+ ✓ Compiled /api/ops/cron-health in 2s (313 modules)
+ GET /api/ops/cron-health?hours=24 200 in 2975ms
+ ○ Compiling /alerts ...
+ ✓ Compiled /alerts in 9.4s (952 modules)
+ ⨯ MongoBulkWriteError: Updating the path 'triggerCount' would create a conflict at 'triggerCount'
+    at UnorderedBulkOperation.handleWriteError (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/bulk/common.js:804:19)
+    at UnorderedBulkOperation.handleWriteError (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/bulk/unordered.js:17:22)
+    at executeCommands (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/bulk/common.js:350:19)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/bulk/common.js:790:24
+    at async MongoClient.withSession (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/mongo_client.js:477:20)
+    at async UnorderedBulkOperation.execute (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/bulk/common.js:789:20)
+    at async Collection.bulkWrite (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/collection.js:224:16)
+    at async Function.bulkWrite (/Users/harz/Downloads/aquafarm/node_modules/mongoose/lib/model.js:3512:20)
+    at async syncAlertsForUser (webpack-internal:///(rsc)/./lib/alerts.ts:455:9)
+    at async GET (webpack-internal:///(rsc)/./app/api/alerts/route.ts:39:24)
+    at async /Users/harz/Downloads/aquafarm/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:6:55038
+    at async ek.execute (/Users/harz/Downloads/aquafarm/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:6:45808)
+    at async ek.handle (/Users/harz/Downloads/aquafarm/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:6:56292)
+    at async doRender (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1377:42)
+    at async cacheEntry.responseCache.get.routeKind (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1599:28)
+    at async DevServer.renderToResponseWithComponentsImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1507:28)
+    at async DevServer.renderPageComponent (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1931:24)
+    at async DevServer.renderToResponseImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1969:32)
+    at async DevServer.pipeImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:920:25)
+    at async NextNodeServer.handleCatchallRenderRequest (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/next-server.js:272:17)
+    at async DevServer.handleRequestImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:816:17)
+    at async /Users/harz/Downloads/aquafarm/node_modules/next/dist/server/dev/next-dev-server.js:339:20
+    at async Span.traceAsyncFn (/Users/harz/Downloads/aquafarm/node_modules/next/dist/trace/trace.js:154:20)
+    at async DevServer.handleRequest (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/dev/next-dev-server.js:336:24)
+    at async invokeRender (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/lib/router-server.js:174:21)
+    at async handleRequest (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/lib/router-server.js:353:24)
+    at async requestHandlerImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/lib/router-server.js:377:13)
+    at async Server.requestListener (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/lib/start-server.js:141:13) {
+  errorLabelSet: Set(0) {},
+  errorResponse: {
+    message: "Updating the path 'triggerCount' would create a conflict at 'triggerCount'",
+    code: 40,
+    writeErrors: [ [WriteError] ]
+  },
+  code: 40,
+  writeErrors: [ WriteError { err: [Object] } ],
+  result: BulkWriteResult {
+    insertedCount: 0,
+    matchedCount: 0,
+    modifiedCount: 0,
+    deletedCount: 0,
+    upsertedCount: 0,
+    upsertedIds: {},
+    insertedIds: {}
+  }
+}
+ GET /api/alerts?limit=100&counts=1&refresh=1 500 in 528ms
+ ⨯ MongoBulkWriteError: Updating the path 'triggerCount' would create a conflict at 'triggerCount'
+    at UnorderedBulkOperation.handleWriteError (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/bulk/common.js:804:19)
+    at UnorderedBulkOperation.handleWriteError (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/bulk/unordered.js:17:22)
+    at executeCommands (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/bulk/common.js:350:19)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/bulk/common.js:790:24
+    at async MongoClient.withSession (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/mongo_client.js:477:20)
+    at async UnorderedBulkOperation.execute (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/bulk/common.js:789:20)
+    at async Collection.bulkWrite (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/collection.js:224:16)
+    at async Function.bulkWrite (/Users/harz/Downloads/aquafarm/node_modules/mongoose/lib/model.js:3512:20)
+    at async syncAlertsForUser (webpack-internal:///(rsc)/./lib/alerts.ts:455:9)
+    at async GET (webpack-internal:///(rsc)/./app/api/alerts/route.ts:39:24)
+    at async /Users/harz/Downloads/aquafarm/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:6:55038
+    at async ek.execute (/Users/harz/Downloads/aquafarm/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:6:45808)
+    at async ek.handle (/Users/harz/Downloads/aquafarm/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:6:56292)
+    at async doRender (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1377:42)
+    at async cacheEntry.responseCache.get.routeKind (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1599:28)
+    at async DevServer.renderToResponseWithComponentsImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1507:28)
+    at async DevServer.renderPageComponent (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1931:24)
+    at async DevServer.renderToResponseImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1969:32)
+    at async DevServer.pipeImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:920:25)
+    at async NextNodeServer.handleCatchallRenderRequest (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/next-server.js:272:17)
+    at async DevServer.handleRequestImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:816:17)
+    at async /Users/harz/Downloads/aquafarm/node_modules/next/dist/server/dev/next-dev-server.js:339:20
+    at async Span.traceAsyncFn (/Users/harz/Downloads/aquafarm/node_modules/next/dist/trace/trace.js:154:20)
+    at async DevServer.handleRequest (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/dev/next-dev-server.js:336:24)
+    at async invokeRender (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/lib/router-server.js:174:21)
+    at async handleRequest (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/lib/router-server.js:353:24)
+    at async requestHandlerImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/lib/router-server.js:377:13)
+    at async Server.requestListener (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/lib/start-server.js:141:13) {
+  errorLabelSet: Set(0) {},
+  errorResponse: {
+    message: "Updating the path 'triggerCount' would create a conflict at 'triggerCount'",
+    code: 40,
+    writeErrors: [ [WriteError] ]
+  },
+  code: 40,
+  writeErrors: [ WriteError { err: [Object] } ],
+  result: BulkWriteResult {
+    insertedCount: 0,
+    matchedCount: 0,
+    modifiedCount: 0,
+    deletedCount: 0,
+    upsertedCount: 0,
+    upsertedIds: {},
+    insertedIds: {}
+  }
+}
+ GET /api/alerts?limit=100&counts=1&refresh=1 500 in 699ms

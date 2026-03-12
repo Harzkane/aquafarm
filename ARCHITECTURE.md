@@ -22,12 +22,13 @@
   - DB connection (`lib/db.ts`)
   - Plans/entitlements (`lib/plans.ts`)
   - Billing reconcile logic (`lib/billing-reconcile.ts`)
+  - Alert rules and synchronization (`lib/alerts.ts`)
   - Cron helpers (`lib/cron-*`)
   - Atomic write helper (`lib/transactions.ts`)
   - Payload validators (`lib/validators/*`)
 - Data models:
   - `User`, `Batch`, `Tank`, `DailyLog`, `Financial`, `FeedInventory`
-  - `TankMovement`, `CalendarEvent`, `AuditLog`, `BillingEvent`, `CronRun`
+  - `TankMovement`, `CalendarEvent`, `AuditLog`, `BillingEvent`, `CronRun`, `AlertNotification`
 
 ## Data Ownership Model (Multi-Tenancy)
 - Owners are tenant roots.
@@ -61,8 +62,21 @@
 - External scheduler triggers:
   - Hourly billing reconcile
   - Daily billing-event prune
+  - Periodic alert evaluation (`alerts-evaluate`)
 - Internal cron routes (`/api/internal/cron/*`) protected by `CRON_SECRET`.
 - `CronRun` model stores run summaries and failures.
+
+## Alerting Architecture
+- Alert data model:
+  - `AlertNotification` stores deduped active/resolved alerts per owner scope.
+- Rule evaluation:
+  - `collectAlertCandidates(userId)` derives candidates from logs, batches, milestones, feed, billing, and ops status.
+  - `syncAlertsForUser(userId, candidates)` upserts active alerts and resolves stale keys.
+- Access:
+  - `GET /api/alerts` for in-app alert feed.
+  - `POST /api/alerts/:id/ack` to dismiss an alert.
+- Scheduling:
+  - `/api/internal/cron/alerts-evaluate` updates alerts in bounded batches for Vercel-safe execution.
 
 ## Transaction Strategy
 - Critical multi-document writes use `runAtomic`:

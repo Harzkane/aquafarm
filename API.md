@@ -35,6 +35,9 @@ All routes are under `app/api/**`.
 - Reports:
   - `GET /api/reports/summary`
   - `GET /api/reports/export`
+- Alerts:
+  - `GET /api/alerts`
+  - `POST /api/alerts/:id/ack`
 
 ## SaaS / Billing
 - `POST /api/billing/checkout`
@@ -70,6 +73,10 @@ Routes:
     - `dryRun=1` optional
     - `keepDays` (30..730)
     - `batchSize` (50..1000)
+- `POST /api/internal/cron/alerts-evaluate`
+  - Query:
+    - `dryRun=1` optional
+    - `limit` (1..200)
 - `GET /api/internal/cron/runs`
   - Query:
     - `job` optional
@@ -82,4 +89,3 @@ Typical response:
 
 Plan/permission lock pattern:
 - `{ "error": "...", "code": "PLAN_FEATURE_LOCKED" }`
-

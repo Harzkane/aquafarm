@@ -37,6 +37,8 @@ Use an external scheduler (for example `cron-job.org`):
   - `POST /api/internal/cron/billing-reconcile?limit=120`
 - Daily retention prune:
   - `POST /api/internal/cron/billing-events-prune?keepDays=180&batchSize=500`
+- Alert evaluation (recommended every 30 minutes):
+  - `POST /api/internal/cron/alerts-evaluate?limit=50`
 
 Note:
 - Internal cron routes require header:
@@ -47,9 +49,11 @@ Note:
    - Call `/api/internal/cron/billing-reconcile?dryRun=1&limit=100`
 2. Prune dry run:
    - Call `/api/internal/cron/billing-events-prune?dryRun=1&keepDays=180&batchSize=200`
-3. Validate outputs:
+3. Alerts dry run:
+   - Call `/api/internal/cron/alerts-evaluate?dryRun=1&limit=20`
+4. Validate outputs:
    - Check `/settings/ops` or `/api/ops/cron-runs`
-4. Run live once if dry run is healthy.
+5. Run live once if dry run is healthy.
 
 ## Ops Monitoring
 - UI:
@@ -64,6 +68,7 @@ Key indicators:
 - Run durations
 - Candidate/updated counts for reconcile
 - Deleted counts for prune
+- Active/resolved counts for alert evaluation
 
 ## Incident Triage
 If cron failures appear:

@@ -9,12 +9,14 @@ import {
   ShieldCheck,
   ActivitySquare,
   AlertTriangle,
+  Bell,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/dashboard",   icon: LayoutDashboard, label: "Dashboard"       },
+  { href: "/alerts",      icon: Bell,             label: "Alerts"          },
   { href: "/batches",     icon: Fish,             label: "Batches"         },
   { href: "/feeding",     icon: ClipboardList,    label: "Daily Log"       },
   { href: "/mortality",   icon: Skull,            label: "Mortality"       },
@@ -45,6 +47,7 @@ export default function Sidebar() {
   const { data: session } = useSession();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [opsFailedRuns, setOpsFailedRuns] = useState(0);
+  const [alertCounts, setAlertCounts] = useState({ total: 0, critical: 0 });
   const currentPlan = ((session?.user as any)?.plan || "free") as "free" | "pro" | "commercial";
   const currentRole = ((session?.user as any)?.role || "owner") as "owner" | "staff";
   const canSeeOps = currentPlan === "commercial" && currentRole === "owner";
@@ -67,6 +70,28 @@ export default function Sidebar() {
       active = false;
     };
   }, [canSeeOps]);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/alerts?limit=5&counts=1", { cache: "no-store" });
+        if (!res.ok) return;
+        const payload = await res.json();
+        if (!active) return;
+        const counts = payload?.counts || {};
+        setAlertCounts({
+          total: Number(counts?.total || 0),
+          critical: Number(counts?.critical || 0),
+        });
+      } catch {
+        // ignore alert summary failures
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
@@ -113,6 +138,16 @@ export default function Sidebar() {
                 <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-amber-400/35 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
                   <Lock className="w-3 h-3" />
                   Upgrade
+                </span>
+              ) : href === "/alerts" && alertCounts.total > 0 ? (
+                <span
+                  className={`ml-auto inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${
+                    alertCounts.critical > 0
+                      ? "border-red-400/35 bg-red-500/10 text-red-200"
+                      : "border-amber-400/35 bg-amber-500/10 text-amber-200"
+                  }`}
+                >
+                  {alertCounts.critical > 0 ? alertCounts.critical : alertCounts.total}
                 </span>
               ) : null}
             </Link>

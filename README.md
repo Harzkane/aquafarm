@@ -24,6 +24,7 @@ It combines farm operations, planning workflows, financial visibility, and SaaS 
 - Operations and reliability:
   - Distributed middleware rate limiting (Upstash REST with local fallback)
   - Protected internal cron jobs for billing reconcile and retention prune
+  - Centralized alert evaluation and notification feed
   - Cron run logging and owner-facing Ops Monitor (`/settings/ops`)
 
 ## Plan Tiers (Implemented)
@@ -117,6 +118,7 @@ npm run test:phase2
 Use an external scheduler (for example `cron-job.org`) to call:
 - `POST /api/internal/cron/billing-reconcile?limit=120`
 - `POST /api/internal/cron/billing-events-prune?keepDays=180&batchSize=500`
+- `POST /api/internal/cron/alerts-evaluate?limit=50`
 
 Include header:
 - `Authorization: Bearer <CRON_SECRET>`
@@ -139,6 +141,7 @@ aquafarm/
 │       ├── feed-inventory/
 │       ├── calendar/events/
 │       ├── reports/
+│       ├── alerts/
 │       ├── staff/
 │       ├── audit/
 │       ├── ops/
@@ -158,3 +161,16 @@ aquafarm/
 - `SECURITY.md` — Authz, rate limiting, and secrets handling
 - `CONTRIBUTING.md` — Local setup and contribution workflow
 - `PHASE2_RELEASE_CHECKLIST.md` — Production rollout checklist
+
+## Alerts and Notifications
+- In-app alerts page: `/alerts`
+- Alert categories currently covered:
+  - Operations and planning: no daily log, overdue milestones, harvest window, feed low stock
+  - Health: mortality spike, water quality risk
+  - SaaS controls: billing risk (`past_due`, expiry, scheduled downgrade), staff seat pressure
+  - Ops reliability: cron failures (commercial owners)
+- Alert feed APIs:
+  - `GET /api/alerts` (active alerts)
+  - `GET /api/alerts?counts=1` (active counts by severity)
+  - `GET /api/alerts?refresh=1` (recompute + sync for current farm)
+  - `POST /api/alerts/:id/ack` (dismiss one alert)
