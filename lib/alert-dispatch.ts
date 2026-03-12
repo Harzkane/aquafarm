@@ -39,6 +39,39 @@ function buildCriticalMessage(input: {
 }
 
 async function sendWhatsApp(to: string, text: string) {
+  const provider = String(process.env.ALERT_WHATSAPP_PROVIDER || "webhook").toLowerCase();
+  if (provider === "meta_cloud") {
+    const accessToken = process.env.WHATSAPP_CLOUD_ACCESS_TOKEN;
+    const phoneNumberId = process.env.WHATSAPP_CLOUD_PHONE_NUMBER_ID;
+    if (!accessToken || !phoneNumberId) {
+      return { ok: false as const, reason: "meta_cloud_not_configured" };
+    }
+    try {
+      const res = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to,
+          type: "text",
+          text: { body: text },
+        }),
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        return { ok: false as const, reason: `meta_http_${res.status}` };
+      }
+      const payload = await res.json().catch(() => ({}));
+      const providerMessageId = String(payload?.messages?.[0]?.id || "");
+      return { ok: true as const, providerMessageId };
+    } catch {
+      return { ok: false as const, reason: "meta_request_failed" };
+    }
+  }
+
   const webhookUrl = process.env.ALERT_WHATSAPP_WEBHOOK_URL;
   const webhookToken = process.env.ALERT_WHATSAPP_WEBHOOK_TOKEN;
   if (!webhookUrl) {

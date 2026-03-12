@@ -125,10 +125,16 @@ Include header:
 - `Authorization: Bearer <CRON_SECRET>`
 
 Optional outbound alert env (WhatsApp):
-- `ALERT_WHATSAPP_WEBHOOK_URL`
-- `ALERT_WHATSAPP_WEBHOOK_TOKEN`
-- `ALERTS_WHATSAPP_TO`
-- `ALERT_OUTBOUND_COOLDOWN_MINUTES`
+- Direct Meta Cloud mode (recommended):
+  - `ALERT_WHATSAPP_PROVIDER=meta_cloud`
+  - `WHATSAPP_CLOUD_PHONE_NUMBER_ID`
+  - `WHATSAPP_CLOUD_ACCESS_TOKEN`
+- Webhook relay mode (optional):
+  - `ALERT_WHATSAPP_WEBHOOK_URL`
+  - `ALERT_WHATSAPP_WEBHOOK_TOKEN`
+- Shared:
+  - `ALERTS_WHATSAPP_TO`
+  - `ALERT_OUTBOUND_COOLDOWN_MINUTES`
 
 ## Project Structure
 ```bash
