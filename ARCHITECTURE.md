@@ -9,7 +9,7 @@
 - Runtime controls:
   - Middleware security and access gates
   - Upstash REST-backed rate limiting in middleware
-  - Vercel cron jobs for background maintenance
+  - External scheduler calls for background maintenance
 
 ## High-Level Modules
 - UI pages:
@@ -58,7 +58,7 @@
   - `BillingEvent` tracks processed event keys
 
 ## Background Jobs
-- Vercel cron config in `vercel.json`:
+- External scheduler triggers:
   - Hourly billing reconcile
   - Daily billing-event prune
 - Internal cron routes (`/api/internal/cron/*`) protected by `CRON_SECRET`.
@@ -81,4 +81,3 @@
 - Ops UI:
   - `/settings/ops`
 - Sidebar shows 24-hour cron failure alert for Commercial owners.
-

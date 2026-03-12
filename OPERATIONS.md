@@ -32,11 +32,11 @@
   - `NEXT_PUBLIC_COMMERCIAL_CHECKIN_URL`
 
 ## Scheduled Jobs
-Configured in `vercel.json`:
+Use an external scheduler (for example `cron-job.org`):
 - Hourly reconcile:
-  - `GET/POST /api/internal/cron/billing-reconcile?limit=120`
+  - `POST /api/internal/cron/billing-reconcile?limit=120`
 - Daily retention prune:
-  - `GET/POST /api/internal/cron/billing-events-prune?keepDays=180&batchSize=500`
+  - `POST /api/internal/cron/billing-events-prune?keepDays=180&batchSize=500`
 
 Note:
 - Internal cron routes require header:
@@ -78,4 +78,3 @@ If cron failures appear:
 - Adjust via query params:
   - `keepDays` (min 30, max 730)
   - `batchSize` (min 50, max 1000)
-

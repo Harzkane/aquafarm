@@ -7,10 +7,10 @@
 - Ensure `NEXTAUTH_SECRET` and `NEXTAUTH_URL` are correct for production.
 
 ## 2) Cron Jobs
-- Confirm `vercel.json` cron jobs are present:
-  - `/api/internal/cron/billing-reconcile?limit=120` hourly (`7 * * * *`)
-  - `/api/internal/cron/billing-events-prune?keepDays=180&batchSize=500` daily (`17 2 * * *`)
-- Validate Vercel cron runs include `Authorization: Bearer <CRON_SECRET>`.
+- Configure external scheduler jobs (for example `cron-job.org`):
+  - `/api/internal/cron/billing-reconcile?limit=120` hourly
+  - `/api/internal/cron/billing-events-prune?keepDays=180&batchSize=500` daily
+- Validate scheduler requests include `Authorization: Bearer <CRON_SECRET>`.
 
 ## 3) Access Controls
 - Confirm `/settings/ops` is accessible only to Commercial owners.
@@ -31,4 +31,3 @@
 ## 6) Monitoring
 - Watch first 24 hours of cron run outcomes via Ops Monitor.
 - Investigate any failure spikes and check `CronRun.error` payloads.
-

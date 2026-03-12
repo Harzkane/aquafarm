@@ -7,7 +7,7 @@ It combines farm operations, planning workflows, financial visibility, and SaaS 
 ## Current Product Status
 - Platform stage: Production-capable SaaS (Phase-2 hardening implemented)
 - Core domain coverage: Operations + planning + billing + team controls + ops visibility
-- Runtime: Vercel (with scheduled cron jobs)
+- Runtime: Vercel (external scheduler for cron endpoints)
 
 ## Core Capabilities
 - Farm operations:
@@ -52,7 +52,7 @@ It combines farm operations, planning workflows, financial visibility, and SaaS 
 | Database | MongoDB (Mongoose) |
 | Auth | NextAuth Credentials + JWT session |
 | Billing | Paystack |
-| Runtime Ops | Vercel Cron + Upstash Redis REST |
+| Runtime Ops | External scheduler + Upstash Redis REST |
 
 ## Quick Start (Local)
 
@@ -113,12 +113,13 @@ npm run test:phase2
 - Internal cron security:
   - `CRON_SECRET`
 
-### Cron jobs
-`vercel.json` defines:
-- Hourly billing reconcile:
-  - `/api/internal/cron/billing-reconcile?limit=120`
-- Daily billing-event prune:
-  - `/api/internal/cron/billing-events-prune?keepDays=180&batchSize=500`
+### Scheduled jobs (external scheduler)
+Use an external scheduler (for example `cron-job.org`) to call:
+- `POST /api/internal/cron/billing-reconcile?limit=120`
+- `POST /api/internal/cron/billing-events-prune?keepDays=180&batchSize=500`
+
+Include header:
+- `Authorization: Bearer <CRON_SECRET>`
 
 ## Project Structure
 ```bash
@@ -146,7 +147,6 @@ aquafarm/
 ├── lib/
 ├── models/
 ├── tests/phase2/
-├── vercel.json
 └── app/globals.css
 ```
 
