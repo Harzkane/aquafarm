@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, UserPlus, Trash2 } from "lucide-react";
+import { Loader2, UserPlus, Trash2, X } from "lucide-react";
 import { formatDateNg } from "@/lib/dates";
 
 type StaffUser = {
@@ -20,6 +20,8 @@ export default function StaffAccessPage() {
   const [maxStaffUsers, setMaxStaffUsers] = useState<number>(5);
   const [staffLimitReached, setStaffLimitReached] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [staffToRemove, setStaffToRemove] = useState<StaffUser | null>(null);
+  const [removingStaffId, setRemovingStaffId] = useState("");
 
   async function loadStaff() {
     setLoading(true);
@@ -67,15 +69,19 @@ export default function StaffAccessPage() {
   }
 
   async function removeStaff(id: string) {
+    setRemovingStaffId(id);
     setError("");
     try {
       const res = await fetch(`/api/staff/${id}`, { method: "DELETE" });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload?.error || "Failed to remove staff");
       setStaff((prev) => prev.filter((user) => user._id !== id));
+      setStaffToRemove(null);
       await loadStaff();
     } catch (err: any) {
       setError(err?.message || "Failed to remove staff");
+    } finally {
+      setRemovingStaffId("");
     }
   }
 
@@ -162,16 +168,70 @@ export default function StaffAccessPage() {
                 <button
                   type="button"
                   className="btn-secondary !px-3 !py-2 text-danger"
-                  onClick={() => removeStaff(user._id)}
+                  onClick={() => setStaffToRemove(user)}
+                  disabled={removingStaffId === user._id}
                 >
-                  <Trash2 className="h-4 w-4" />
-                  Remove
+                  {removingStaffId === user._id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  {removingStaffId === user._id ? "Removing..." : "Remove"}
                 </button>
               </div>
             ))}
           </div>
         )}
       </section>
+
+      {staffToRemove ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{
+            background: "rgba(12, 12, 14,0.85)",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          <div className="glass-card w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="font-display text-lg text-pond-100">Remove Staff User</h2>
+              <button
+                type="button"
+                onClick={() => setStaffToRemove(null)}
+                className="text-pond-200/75 hover:text-pond-300"
+                disabled={removingStaffId === staffToRemove._id}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="text-sm text-pond-200/80">
+              Remove <span className="font-medium text-pond-100">{staffToRemove.name}</span> from this farm workspace?
+            </p>
+            <p className="text-xs text-pond-200/65">
+              They will lose access immediately and will need to be added again to sign in later.
+            </p>
+            <div className="rounded-xl border border-pond-700/20 bg-black/20 px-4 py-3">
+              <p className="text-sm text-pond-100">{staffToRemove.name}</p>
+              <p className="text-xs text-pond-200/70 mt-1">{staffToRemove.email}</p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setStaffToRemove(null)}
+                className="btn-secondary flex-1"
+                disabled={removingStaffId === staffToRemove._id}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => removeStaff(staffToRemove._id)}
+                className="btn-secondary flex-1 text-danger"
+                disabled={removingStaffId === staffToRemove._id}
+              >
+                {removingStaffId === staffToRemove._id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                {removingStaffId === staffToRemove._id ? "Removing..." : "Confirm Remove"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

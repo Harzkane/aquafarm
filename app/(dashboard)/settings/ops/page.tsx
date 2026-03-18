@@ -86,9 +86,13 @@ export default function OpsMonitorPage() {
 
   useEffect(() => {
     (async () => {
-      setLoading(true);
-      await load();
-      setLoading(false);
+      if (loading) {
+        setLoading(true);
+        await load();
+        setLoading(false);
+        return;
+      }
+      await load({ showRefreshing: true });
     })();
   }, [deferredQuery, page, pageSize, statusFilter]);
 

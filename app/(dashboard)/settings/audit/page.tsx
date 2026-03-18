@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import { Loader2, ShieldCheck, Search } from "lucide-react";
 import { formatDateTimeNg } from "@/lib/dates";
 
@@ -28,66 +28,59 @@ const RESOURCE_FILTERS: Array<{ key: ResourceFilter; label: string }> = [
   { key: "water_quality", label: "Water Quality" },
 ];
 
-function resourceMatchesFilter(resource: string, filter: ResourceFilter) {
-  if (filter === "all") return true;
-  if (filter === "billing") return resource === "billing";
-  if (filter === "staff") return resource === "staff_user";
-  if (filter === "batches") return resource === "batch";
-  if (filter === "tanks") return resource === "tank";
-  if (filter === "logs") return resource === "daily_log";
-  if (filter === "water_quality") return resource === "water_quality";
-  return true;
-}
-
 export default function AuditPage() {
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [resourceFilter, setResourceFilter] = useState<ResourceFilter>("all");
   const [logs, setLogs] = useState<AuditItem[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [totalLogs, setTotalLogs] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const deferredQuery = useDeferredValue(query);
+
+  async function load(options?: { initial?: boolean }) {
+    if (options?.initial) setLoading(true);
+    else setRefreshing(true);
+    setError("");
+    try {
+      const params = new URLSearchParams();
+      if (deferredQuery.trim()) params.set("query", deferredQuery.trim());
+      if (resourceFilter !== "all") params.set("resource", resourceFilter);
+      params.set("page", String(page));
+      params.set("pageSize", String(pageSize));
+
+      const res = await fetch(`/api/audit?${params.toString()}`, { cache: "no-store" });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || "Failed to load audit logs");
+      setLogs(Array.isArray(payload?.logs) ? payload.logs : []);
+      setTotalLogs(Number(payload?.totals?.totalLogs || 0));
+      setTotalPages(Math.max(1, Number(payload?.pagination?.totalPages || 1)));
+    } catch (err: any) {
+      setError(err?.message || "Failed to load audit logs");
+    } finally {
+      if (options?.initial) setLoading(false);
+      else setRefreshing(false);
+    }
+  }
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const res = await fetch("/api/audit?limit=200", { cache: "no-store" });
-        const payload = await res.json();
-        if (!res.ok) throw new Error(payload?.error || "Failed to load audit logs");
-        setLogs(Array.isArray(payload?.logs) ? payload.logs : []);
-      } catch (err: any) {
-        setError(err?.message || "Failed to load audit logs");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return logs.filter((log) => {
-      if (!resourceMatchesFilter(log.resource, resourceFilter)) return false;
-      if (!q) return true;
-      const text = `${log.actorName || ""} ${log.actorEmail || ""} ${log.action || ""} ${log.resource || ""} ${log.summary || ""}`.toLowerCase();
-      return text.includes(q);
-    });
-  }, [logs, query, resourceFilter]);
+    void load({ initial: loading });
+  }, [deferredQuery, resourceFilter, page, pageSize]);
 
   useEffect(() => {
     setPage(1);
-  }, [query, resourceFilter]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const paginatedLogs = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, page, pageSize]);
+  }, [deferredQuery, resourceFilter]);
 
   useEffect(() => {
     setPage((current) => Math.min(current, totalPages));
   }, [totalPages]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [pageSize]);
 
   if (loading) {
     return (
@@ -105,8 +98,8 @@ export default function AuditPage() {
           <p className="mt-1 text-sm text-pond-200/75">Track who changed what and when across your farm operations.</p>
         </div>
         <div className="badge badge-green">
-          <ShieldCheck className="h-4 w-4" />
-          {filtered.length} events
+          {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+          {totalLogs} events
         </div>
       </div>
 
@@ -143,12 +136,12 @@ export default function AuditPage() {
           <h2 className="section-title">Recent Activity</h2>
           <p className="text-xs text-pond-200/65">Dates shown in local formatted time</p>
         </div>
-        {filtered.length === 0 ? (
+        {totalLogs === 0 ? (
           <div className="p-10 text-center text-sm text-pond-200/70">No audit events found.</div>
         ) : (
           <>
             <div className="divide-y divide-pond-700/20">
-            {paginatedLogs.map((log) => (
+            {logs.map((log) => (
               <div key={log._id} className="px-5 py-4 flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-sm text-pond-100 font-medium">{log.summary || `${log.action} ${log.resource}`}</p>
@@ -164,7 +157,7 @@ export default function AuditPage() {
             </div>
             <div className="px-5 py-3 border-t border-pond-700/20 flex items-center justify-between gap-3 flex-wrap">
               <p className="text-xs text-pond-200/65">
-                Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, filtered.length)} of {filtered.length}
+                Showing {totalLogs === 0 ? 0 : (page - 1) * pageSize + 1}-{Math.min(page * pageSize, totalLogs)} of {totalLogs}
               </p>
               <div className="flex items-center gap-2">
                 <select
