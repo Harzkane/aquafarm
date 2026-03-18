@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Loader2, TestTube2, CheckCircle2, Search, X } from "lucide-react";
+import { Plus, Loader2, TestTube2, CheckCircle2, Search, X, CalendarDays } from "lucide-react";
 
 type Batch = { _id: string; name: string };
 type WaterLog = {
@@ -351,7 +351,11 @@ export default function WaterQualityPage() {
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Date</label>
-                  <input className="field" type="date" value={form.date} onChange={(e) => setField("date", e.target.value)} />
+                  <div className="date-field-wrap">
+                    <span className="date-field-badge" />
+                    <CalendarDays className="date-field-icon h-5 w-5 text-pond-200/80" strokeWidth={2.25} />
+                    <input className="field" type="date" value={form.date} onChange={(e) => setField("date", e.target.value)} />
+                  </div>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -364,27 +368,27 @@ export default function WaterQualityPage() {
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Tank</label>
-                  <input className="field" value={form.tankName} onChange={(e) => setField("tankName", e.target.value)} />
+                  <input className="field" placeholder="Tank 4" value={form.tankName} onChange={(e) => setField("tankName", e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">pH</label>
-                  <input className="field" type="number" step="0.1" value={form.ph} onChange={(e) => setField("ph", e.target.value)} />
+                  <input className="field" type="number" step="0.1" placeholder="7.2" value={form.ph} onChange={(e) => setField("ph", e.target.value)} />
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Ammonia (ppm)</label>
-                  <input className="field" type="number" step="0.01" value={form.ammonia} onChange={(e) => setField("ammonia", e.target.value)} />
+                  <input className="field" type="number" step="0.01" placeholder="0.12" value={form.ammonia} onChange={(e) => setField("ammonia", e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Temperature (°C)</label>
-                  <input className="field" type="number" step="0.1" value={form.temperature} onChange={(e) => setField("temperature", e.target.value)} />
+                  <input className="field" type="number" step="0.1" placeholder="28.4" value={form.temperature} onChange={(e) => setField("temperature", e.target.value)} />
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Dissolved O₂ (mg/L)</label>
-                  <input className="field" type="number" step="0.1" value={form.dissolvedO2} onChange={(e) => setField("dissolvedO2", e.target.value)} />
+                  <input className="field" type="number" step="0.1" placeholder="5.8" value={form.dissolvedO2} onChange={(e) => setField("dissolvedO2", e.target.value)} />
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -404,7 +408,7 @@ export default function WaterQualityPage() {
               </div>
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Observations</label>
-                <textarea className="field resize-none" rows={3} value={form.observations} onChange={(e) => setField("observations", e.target.value)} />
+                <textarea className="field resize-none" rows={3} placeholder="Water slightly cloudy after morning feed" value={form.observations} onChange={(e) => setField("observations", e.target.value)} />
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowForm(false)} className="btn-secondary flex-1">

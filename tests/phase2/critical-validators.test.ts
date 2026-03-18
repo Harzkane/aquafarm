@@ -12,6 +12,8 @@ test("validateLogPayload accepts a valid daily log payload", () => {
     batchId: objectId,
     feedSession: "morning",
     feedGiven: 2.5,
+    feedBrand: "Aller Aqua",
+    feedSizeMm: 2,
     mortality: 3,
     ph: 7.2,
     ammonia: 0.1,
@@ -24,6 +26,24 @@ test("validateLogPayload accepts a valid daily log payload", () => {
   if (result.ok) {
     assert.equal(result.value.batchId, objectId);
     assert.equal(result.value.waterChangePct, 25);
+    assert.equal(result.value.feedType, "Aller Aqua 2mm");
+    assert.equal(result.value.feedBrand, "Aller Aqua");
+    assert.equal(result.value.feedSizeMm, 2);
+  }
+});
+
+test("validateLogPayload derives feed identity from legacy feedType text", () => {
+  const result = validateLogPayload({
+    batchId: objectId,
+    feedGiven: 1.2,
+    feedType: "Skretting 3mm",
+  });
+
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.value.feedBrand, "Skretting");
+    assert.equal(result.value.feedSizeMm, 3);
+    assert.equal(result.value.feedType, "Skretting 3mm");
   }
 });
 
@@ -82,4 +102,3 @@ test("validateHarvestPayload accepts valid harvest payload", () => {
     assert.equal(result.value.markBatchHarvested, true);
   }
 });
-

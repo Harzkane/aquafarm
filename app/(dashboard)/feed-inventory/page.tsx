@@ -1,12 +1,13 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, Search, Pencil, Trash2, X, Wheat } from "lucide-react";
+import { Loader2, Plus, Search, Pencil, Trash2, X, Wheat, CalendarDays } from "lucide-react";
 import { formatNaira } from "@/lib/utils";
 
 type FeedPurchase = {
   _id: string;
   date: string;
   brand: string;
+  pelletSizeMm?: number | null;
   bagSizeKg: number;
   bags: number;
   totalKg: number;
@@ -16,16 +17,37 @@ type FeedPurchase = {
   notes?: string;
 };
 
+type FeedProduct = {
+  key: string;
+  brand: string;
+  pelletSizeMm: number | null;
+  label: string;
+  purchasedKg: number;
+  purchasedCost: number;
+  consumedKg: number;
+  remainingKg: number;
+  avgDailyUse: number;
+  estimatedDaysLeft: number | null;
+  feedingDays14: number;
+  bagSizesKg: number[];
+  purchaseCount: number;
+  lastUsedAt: string | null;
+  lowStockSeverity: "warning" | "critical" | null;
+};
+
 type FeedPayload = {
   openingStockKg: number;
+  openingStockBrand: string;
+  openingStockSizeMm: number | null;
   purchases: FeedPurchase[];
+  products: FeedProduct[];
+  lowStockProducts: FeedProduct[];
   totals: {
+    stockedKg: number;
     purchasedKg: number;
     purchasedCost: number;
     consumedKg: number;
     remainingKg: number;
-    avgDailyUse: number;
-    estimatedDaysLeft: number | null;
   };
 };
 
@@ -36,8 +58,12 @@ export default function FeedInventoryPage() {
   const [error, setError] = useState("");
   const [data, setData] = useState<FeedPayload>({
     openingStockKg: 0,
+    openingStockBrand: "",
+    openingStockSizeMm: null,
     purchases: [],
-    totals: { purchasedKg: 0, purchasedCost: 0, consumedKg: 0, remainingKg: 0, avgDailyUse: 0, estimatedDaysLeft: null },
+    products: [],
+    lowStockProducts: [],
+    totals: { stockedKg: 0, purchasedKg: 0, purchasedCost: 0, consumedKg: 0, remainingKg: 0 },
   });
   const [query, setQuery] = useState("");
 
@@ -45,10 +71,13 @@ export default function FeedInventoryPage() {
   const [editEntry, setEditEntry] = useState<FeedPurchase | null>(null);
   const [deleteEntry, setDeleteEntry] = useState<FeedPurchase | null>(null);
   const [openingStockEdit, setOpeningStockEdit] = useState("0");
+  const [openingBrandEdit, setOpeningBrandEdit] = useState("");
+  const [openingSizeEdit, setOpeningSizeEdit] = useState("");
 
   const [form, setForm] = useState({
     date: new Date().toISOString().split("T")[0],
     brand: "",
+    pelletSizeMm: "",
     bagSizeKg: "",
     bags: "",
     unitPrice: "",
@@ -65,6 +94,8 @@ export default function FeedInventoryPage() {
       if (!res.ok) throw new Error(payload?.error || "Failed to load feed inventory");
       setData(payload);
       setOpeningStockEdit(String(payload?.openingStockKg ?? 0));
+      setOpeningBrandEdit(String(payload?.openingStockBrand ?? ""));
+      setOpeningSizeEdit(payload?.openingStockSizeMm != null ? String(payload.openingStockSizeMm) : "");
     } catch (err: any) {
       setError(err?.message || "Unable to load feed inventory");
     } finally {
@@ -90,6 +121,7 @@ export default function FeedInventoryPage() {
     setForm({
       date: new Date().toISOString().split("T")[0],
       brand: "",
+      pelletSizeMm: "",
       bagSizeKg: "",
       bags: "",
       unitPrice: "",
@@ -105,7 +137,11 @@ export default function FeedInventoryPage() {
       const res = await fetch("/api/feed-inventory", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ openingStockKg: Number(openingStockEdit || 0) }),
+        body: JSON.stringify({
+          openingStockKg: Number(openingStockEdit || 0),
+          openingStockBrand: openingBrandEdit,
+          openingStockSizeMm: openingSizeEdit === "" ? null : Number(openingSizeEdit),
+        }),
       });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload?.error || "Failed to update opening stock");
@@ -127,6 +163,7 @@ export default function FeedInventoryPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          pelletSizeMm: form.pelletSizeMm === "" ? null : Number(form.pelletSizeMm),
           bagSizeKg: Number(form.bagSizeKg),
           bags: Number(form.bags),
           unitPrice: Number(form.unitPrice),
@@ -149,6 +186,7 @@ export default function FeedInventoryPage() {
     setForm({
       date: new Date(entry.date).toISOString().split("T")[0],
       brand: entry.brand || "",
+      pelletSizeMm: entry.pelletSizeMm != null ? String(entry.pelletSizeMm) : "",
       bagSizeKg: String(entry.bagSizeKg || ""),
       bags: String(entry.bags || ""),
       unitPrice: String(entry.unitPrice || ""),
@@ -168,6 +206,7 @@ export default function FeedInventoryPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          pelletSizeMm: form.pelletSizeMm === "" ? null : Number(form.pelletSizeMm),
           bagSizeKg: Number(form.bagSizeKg),
           bags: Number(form.bags),
           unitPrice: Number(form.unitPrice),
@@ -210,7 +249,13 @@ export default function FeedInventoryPage() {
     );
   }
 
-  const lowStock = data.totals.remainingKg <= Math.max(50, data.totals.avgDailyUse * 7);
+  const lowStock = data.lowStockProducts.length > 0;
+  const formatForecastHorizon = (days: number | null) => {
+    if (days == null) return "—";
+    if (days < 14) return `${days.toFixed(1)} days`;
+    if (days < 60) return `${(days / 7).toFixed(1)} weeks`;
+    return `${(days / 30.44).toFixed(1)} months`;
+  };
 
   return (
     <div className="space-y-6">
@@ -228,8 +273,8 @@ export default function FeedInventoryPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="stat-card">
-          <p className="text-xs text-pond-200/75 uppercase tracking-wider mb-2">Purchased (kg)</p>
-          <p className="font-mono text-2xl font-semibold text-water-300">{data.totals.purchasedKg.toFixed(2)}</p>
+          <p className="text-xs text-pond-200/75 uppercase tracking-wider mb-2">Stocked In (kg)</p>
+          <p className="font-mono text-2xl font-semibold text-water-300">{data.totals.stockedKg.toFixed(2)}</p>
         </div>
         <div className="stat-card">
           <p className="text-xs text-pond-200/75 uppercase tracking-wider mb-2">Consumed (kg)</p>
@@ -240,9 +285,9 @@ export default function FeedInventoryPage() {
           <p className={`font-mono text-2xl font-semibold ${lowStock ? "text-danger" : "text-success"}`}>{data.totals.remainingKg.toFixed(2)}</p>
         </div>
         <div className="stat-card">
-          <p className="text-xs text-pond-200/75 uppercase tracking-wider mb-2">Estimated Days Left</p>
+          <p className="text-xs text-pond-200/75 uppercase tracking-wider mb-2">Tracked Products</p>
           <p className={`font-mono text-2xl font-semibold ${lowStock ? "text-danger" : "text-pond-200"}`}>
-            {data.totals.estimatedDaysLeft != null ? data.totals.estimatedDaysLeft.toFixed(1) : "—"}
+            {data.products.length}
           </p>
         </div>
       </div>
@@ -250,17 +295,74 @@ export default function FeedInventoryPage() {
       <div className="glass-card p-4 space-y-3">
         <h2 className="section-title !text-base">Stock Settings</h2>
         <p className="text-xs text-pond-200/70">
-          Initial stock is feed already available before recorded purchases. It is added to Purchased (kg).
+          Assign opening stock to the exact feed product so later usage is deducted from the correct pellet size.
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className="block text-xs text-pond-300 mb-1.5 font-medium">Initial Stock (kg)</label>
             <input className="field" type="number" min={0} step="0.1" value={openingStockEdit} onChange={(e) => setOpeningStockEdit(e.target.value)} />
           </div>
+          <div>
+            <label className="block text-xs text-pond-300 mb-1.5 font-medium">Opening Brand / Product</label>
+            <input className="field" placeholder="Aller Aqua" value={openingBrandEdit} onChange={(e) => setOpeningBrandEdit(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs text-pond-300 mb-1.5 font-medium">Pellet Size (mm)</label>
+            <input className="field" type="number" min={0.1} step="0.1" placeholder="2" value={openingSizeEdit} onChange={(e) => setOpeningSizeEdit(e.target.value)} />
+          </div>
+        </div>
+        <div className="flex justify-end">
           <button className="btn-secondary self-end" onClick={saveOpeningStock} disabled={saving}>
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Initial Stock"}
           </button>
         </div>
+      </div>
+
+      <div className="glass-card p-4 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="section-title !text-base">Feed Products</h2>
+            <p className="text-xs text-pond-200/70 mt-1">Stock is forecast per product, not just total kg.</p>
+          </div>
+          {lowStock ? <span className="badge badge-red">{data.lowStockProducts.length} low-stock</span> : <span className="badge badge-green">Healthy</span>}
+        </div>
+        {data.products.length === 0 ? (
+          <p className="text-sm text-pond-200/65">No feed products tracked yet. Add a purchase or set opening stock details.</p>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {data.products.map((product) => (
+              <div
+                key={product.key}
+                className="rounded-xl p-4 space-y-2"
+                style={{ background: "rgba(12, 12, 14, 0.7)", border: "1px solid rgba(148, 163, 184, 0.16)" }}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-pond-100">{product.label}</p>
+                    <p className="text-xs text-pond-200/65">
+                      Bag sizes: {product.bagSizesKg.length > 0 ? product.bagSizesKg.map((size) => `${size}kg`).join(", ") : "opening stock only"}
+                    </p>
+                  </div>
+                  {product.lowStockSeverity ? (
+                    <span className={`badge ${product.lowStockSeverity === "critical" ? "badge-red" : "badge-water"}`}>
+                      {product.lowStockSeverity === "critical" ? "Critical" : "Low"}
+                    </span>
+                  ) : (
+                    <span className="badge badge-green">OK</span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <p className="text-pond-200/70">Purchased: <span className="font-mono text-pond-200">{product.purchasedKg.toFixed(2)}kg</span></p>
+                  <p className="text-pond-200/70">Consumed: <span className="font-mono text-pond-200">{product.consumedKg.toFixed(2)}kg</span></p>
+                  <p className="text-pond-200/70">Remaining: <span className={`font-mono ${product.lowStockSeverity ? "text-danger" : "text-success"}`}>{product.remainingKg.toFixed(2)}kg</span></p>
+                  <p className="text-pond-200/70">Avg use: <span className="font-mono text-pond-200">{product.avgDailyUse.toFixed(2)}kg/day</span></p>
+                  <p className="text-pond-200/70">Forecast left: <span className="font-mono text-pond-200">{formatForecastHorizon(product.estimatedDaysLeft)}</span></p>
+                  <p className="text-pond-200/70">Last used: <span className="font-mono text-pond-200">{product.lastUsedAt ? new Date(product.lastUsedAt).toLocaleDateString("en-NG", { day: "numeric", month: "short" }) : "—"}</span></p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="glass-card p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -289,6 +391,7 @@ export default function FeedInventoryPage() {
                     <p className="text-sm text-pond-200 font-medium">{p.brand}</p>
                     <span className="badge badge-water">{p.totalKg}kg</span>
                   </div>
+                  <p className="text-xs text-pond-200/65">{p.pelletSizeMm != null ? `${p.pelletSizeMm}mm pellets` : "Pellet size not set"}</p>
                   <p className="text-xs text-pond-200/65">
                     {new Date(p.date).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}
                   </p>
@@ -315,6 +418,7 @@ export default function FeedInventoryPage() {
                   <tr>
                     <th>Date</th>
                     <th>Brand</th>
+                    <th>Pellet Size (mm)</th>
                     <th>Bag Size (kg)</th>
                     <th>Bags</th>
                     <th>Total (kg)</th>
@@ -331,6 +435,7 @@ export default function FeedInventoryPage() {
                         {new Date(p.date).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}
                       </td>
                       <td className="text-xs">{p.brand}</td>
+                      <td className="font-mono text-xs">{p.pelletSizeMm ?? "—"}</td>
                       <td className="font-mono text-xs">{p.bagSizeKg}</td>
                       <td className="font-mono text-xs">{p.bags}</td>
                       <td className="font-mono text-xs">{p.totalKg}</td>
@@ -369,34 +474,42 @@ export default function FeedInventoryPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Date</label>
-                  <input className="field" type="date" value={form.date} onChange={(e) => update("date", e.target.value)} />
+                  <div className="date-field-wrap">
+                    <span className="date-field-badge" />
+                    <CalendarDays className="date-field-icon h-5 w-5 text-pond-200/80" strokeWidth={2.25} />
+                    <input className="field" type="date" value={form.date} onChange={(e) => update("date", e.target.value)} />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Brand / Type *</label>
-                  <input className="field" required value={form.brand} onChange={(e) => update("brand", e.target.value)} />
+                  <input className="field" required placeholder="Aller Aqua" value={form.brand} onChange={(e) => update("brand", e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-xs text-pond-300 mb-1.5 font-medium">Pellet Size (mm)</label>
+                  <input className="field" min={0.1} step="0.1" type="number" placeholder="2" value={form.pelletSizeMm} onChange={(e) => update("pelletSizeMm", e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Bag Size (kg) *</label>
-                  <input className="field" required min={0.1} step="0.1" type="number" value={form.bagSizeKg} onChange={(e) => update("bagSizeKg", e.target.value)} />
+                  <input className="field" required min={0.1} step="0.1" type="number" placeholder="15" value={form.bagSizeKg} onChange={(e) => update("bagSizeKg", e.target.value)} />
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Bags *</label>
-                  <input className="field" required min={1} type="number" value={form.bags} onChange={(e) => update("bags", e.target.value)} />
+                  <input className="field" required min={1} type="number" placeholder="1" value={form.bags} onChange={(e) => update("bags", e.target.value)} />
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Unit Price (₦) *</label>
-                  <input className="field" required min={0} type="number" value={form.unitPrice} onChange={(e) => update("unitPrice", e.target.value)} />
+                  <input className="field" required min={0} type="number" placeholder="18500" value={form.unitPrice} onChange={(e) => update("unitPrice", e.target.value)} />
                 </div>
               </div>
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Supplier</label>
-                <input className="field" value={form.supplier} onChange={(e) => update("supplier", e.target.value)} />
+                <input className="field" placeholder="Chi Farms" value={form.supplier} onChange={(e) => update("supplier", e.target.value)} />
               </div>
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Notes</label>
-                <textarea className="field resize-none" rows={2} value={form.notes} onChange={(e) => update("notes", e.target.value)} />
+                <textarea className="field resize-none" rows={2} placeholder="Juvenile feed for Batch A" value={form.notes} onChange={(e) => update("notes", e.target.value)} />
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary flex-1">Cancel</button>
@@ -423,34 +536,42 @@ export default function FeedInventoryPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Date</label>
-                  <input className="field" type="date" value={form.date} onChange={(e) => update("date", e.target.value)} />
+                  <div className="date-field-wrap">
+                    <span className="date-field-badge" />
+                    <CalendarDays className="date-field-icon h-5 w-5 text-pond-200/80" strokeWidth={2.25} />
+                    <input className="field" type="date" value={form.date} onChange={(e) => update("date", e.target.value)} />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Brand / Type *</label>
-                  <input className="field" required value={form.brand} onChange={(e) => update("brand", e.target.value)} />
+                  <input className="field" required placeholder="Aller Aqua" value={form.brand} onChange={(e) => update("brand", e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-xs text-pond-300 mb-1.5 font-medium">Pellet Size (mm)</label>
+                  <input className="field" min={0.1} step="0.1" type="number" placeholder="2" value={form.pelletSizeMm} onChange={(e) => update("pelletSizeMm", e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Bag Size (kg) *</label>
-                  <input className="field" required min={0.1} step="0.1" type="number" value={form.bagSizeKg} onChange={(e) => update("bagSizeKg", e.target.value)} />
+                  <input className="field" required min={0.1} step="0.1" type="number" placeholder="15" value={form.bagSizeKg} onChange={(e) => update("bagSizeKg", e.target.value)} />
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Bags *</label>
-                  <input className="field" required min={1} type="number" value={form.bags} onChange={(e) => update("bags", e.target.value)} />
+                  <input className="field" required min={1} type="number" placeholder="1" value={form.bags} onChange={(e) => update("bags", e.target.value)} />
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Unit Price (₦) *</label>
-                  <input className="field" required min={0} type="number" value={form.unitPrice} onChange={(e) => update("unitPrice", e.target.value)} />
+                  <input className="field" required min={0} type="number" placeholder="18500" value={form.unitPrice} onChange={(e) => update("unitPrice", e.target.value)} />
                 </div>
               </div>
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Supplier</label>
-                <input className="field" value={form.supplier} onChange={(e) => update("supplier", e.target.value)} />
+                <input className="field" placeholder="Chi Farms" value={form.supplier} onChange={(e) => update("supplier", e.target.value)} />
               </div>
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Notes</label>
-                <textarea className="field resize-none" rows={2} value={form.notes} onChange={(e) => update("notes", e.target.value)} />
+                <textarea className="field resize-none" rows={2} placeholder="Juvenile feed for Batch A" value={form.notes} onChange={(e) => update("notes", e.target.value)} />
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setEditEntry(null)} className="btn-secondary flex-1">Cancel</button>

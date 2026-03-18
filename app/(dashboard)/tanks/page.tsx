@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowRightLeft,
+  CalendarDays,
   Droplets,
   Loader2,
   Pencil,
@@ -35,6 +36,8 @@ type BatchOption = {
   _id: string;
   name: string;
   status: "active" | "partial" | "harvested";
+  currentCount?: number;
+  tankAllocations?: Array<{ tankId?: string; tankName?: string; fishCount?: number }>;
 };
 
 type TankMovement = {
@@ -67,6 +70,12 @@ type MoveForm = {
   date: string;
   reason: string;
   notes: string;
+};
+
+type AllocateForm = {
+  batchId: string;
+  tankId: string;
+  count: string;
 };
 
 const TANK_TYPES: TankType[] = [
@@ -145,6 +154,12 @@ const initialMoveForm: MoveForm = {
   notes: "",
 };
 
+const initialAllocateForm: AllocateForm = {
+  batchId: "",
+  tankId: "",
+  count: "",
+};
+
 function toForm(tank: Tank): TankForm {
   return {
     name: tank.name || "",
@@ -172,18 +187,17 @@ export default function TanksPage() {
   );
   const [planLabel, setPlanLabel] = useState("Free");
   const [tankLimit, setTankLimit] = useState<number | null>(null);
-
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState<TankForm>(initialForm);
-
   const [editingTank, setEditingTank] = useState<Tank | null>(null);
   const [editForm, setEditForm] = useState<TankForm>(initialForm);
-
   const [deletingTank, setDeletingTank] = useState<Tank | null>(null);
-
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [moveForm, setMoveForm] = useState<MoveForm>(initialMoveForm);
   const [moveError, setMoveError] = useState("");
+  const [showAllocateModal, setShowAllocateModal] = useState(false);
+  const [allocateForm, setAllocateForm] = useState<AllocateForm>(initialAllocateForm);
+  const [allocateError, setAllocateError] = useState("");
   const [movementPage, setMovementPage] = useState(1);
   const [movementPageSize, setMovementPageSize] = useState(10);
 
@@ -261,6 +275,29 @@ export default function TanksPage() {
     });
     setMoveError("");
     setShowMoveModal(true);
+    setError("");
+  }
+
+  function openAllocate() {
+    const defaultBatch = batches.find((batch) => {
+      const allocated = (batch.tankAllocations || []).reduce(
+        (sum, item) => sum + Number(item?.fishCount || 0),
+        0,
+      );
+      return Math.max(0, Number(batch.currentCount || 0) - allocated) > 0;
+    });
+    const defaultTank = tanks.find((tank) => {
+      const target = Number(tank.targetFishCapacity || 0);
+      const current = Number(tank.currentFish || 0);
+      return target === 0 || current < target;
+    });
+    setAllocateForm({
+      batchId: defaultBatch?._id || "",
+      tankId: defaultTank?._id || "",
+      count: "",
+    });
+    setAllocateError("");
+    setShowAllocateModal(true);
     setError("");
   }
 
@@ -394,6 +431,36 @@ export default function TanksPage() {
     }
   }
 
+  async function submitAllocation(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    setAllocateError("");
+
+    try {
+      const res = await fetch("/api/tanks/allocate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...allocateForm,
+          count: Number(allocateForm.count),
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || "Failed to allocate fish");
+
+      setShowAllocateModal(false);
+      setAllocateForm(initialAllocateForm);
+      await loadData();
+    } catch (err: any) {
+      const message = err?.message || "Failed to allocate fish";
+      setAllocateError(message);
+      setError(message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function seedMyTanks() {
     setSaving(true);
     setError("");
@@ -427,6 +494,50 @@ export default function TanksPage() {
     () => tanks.reduce((sum, tank) => sum + Number(tank.currentFish || 0), 0),
     [tanks],
   );
+  const totalBatchFishAlive = useMemo(
+    () =>
+      batches.reduce((sum, batch) => {
+        if (batch.status !== "active" && batch.status !== "partial") return sum;
+        return sum + Number(batch.currentCount || 0);
+      }, 0),
+    [batches],
+  );
+  const unassignedFish = Math.max(0, totalBatchFishAlive - totalFish);
+  const overTrackedFish = Math.max(0, totalFish - totalBatchFishAlive);
+  const selectedAllocateBatch = useMemo(
+    () => batches.find((batch) => batch._id === allocateForm.batchId) || null,
+    [allocateForm.batchId, batches],
+  );
+  const selectedAllocateTank = useMemo(
+    () => tanks.find((tank) => tank._id === allocateForm.tankId) || null,
+    [allocateForm.tankId, tanks],
+  );
+  const selectedBatchUnassigned = useMemo(() => {
+    if (!selectedAllocateBatch) return 0;
+    const allocated = (selectedAllocateBatch.tankAllocations || []).reduce(
+      (sum, item) => sum + Number(item?.fishCount || 0),
+      0,
+    );
+    return Math.max(0, Number(selectedAllocateBatch.currentCount || 0) - allocated);
+  }, [selectedAllocateBatch]);
+  const requestedAllocation = Number(allocateForm.count || 0);
+  const allocateTankRemaining = useMemo(() => {
+    const target = Number(selectedAllocateTank?.targetFishCapacity || 0);
+    const current = Number(selectedAllocateTank?.currentFish || 0);
+    return target > 0 ? Math.max(0, target - current) : Number.POSITIVE_INFINITY;
+  }, [selectedAllocateTank]);
+  const allocationExceedsBatch = Number.isFinite(requestedAllocation) && requestedAllocation > selectedBatchUnassigned;
+  const allocationExceedsTank =
+    Number.isFinite(requestedAllocation) &&
+    Number.isFinite(allocateTankRemaining) &&
+    requestedAllocation > allocateTankRemaining;
+  const allocateFormValid =
+    !!allocateForm.batchId &&
+    !!allocateForm.tankId &&
+    Number.isFinite(requestedAllocation) &&
+    requestedAllocation > 0 &&
+    !allocationExceedsBatch &&
+    !allocationExceedsTank;
   const activeTanks = useMemo(
     () => tanks.filter((tank) => tank.status === "active").length,
     [tanks],
@@ -520,6 +631,11 @@ export default function TanksPage() {
         </div>
         <div className="flex items-center gap-2">
           <CurrentPlanBadge />
+          {unassignedFish > 0 ? (
+            <button onClick={openAllocate} className="btn-secondary">
+              <Plus className="w-4 h-4" /> Allocate Batch Fish
+            </button>
+          ) : null}
           <button onClick={() => openMove()} className="btn-secondary">
             <ArrowRightLeft className="w-4 h-4" /> Move Fish
           </button>
@@ -535,6 +651,22 @@ export default function TanksPage() {
           <span>{error}</span>
         </div>
       )}
+      {unassignedFish > 0 ? (
+        <div className="rounded-xl px-4 py-3 text-sm border border-amber-400/30 bg-amber-500/10 text-amber-200 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>
+            {unassignedFish.toLocaleString()} fish are alive in active batches but not yet assigned to tanks. Update tank fish counts or move fish so tank tracking matches the dashboard.
+          </span>
+        </div>
+      ) : null}
+      {overTrackedFish > 0 ? (
+        <div className="rounded-xl px-4 py-3 text-sm border border-red-400/30 bg-red-500/10 text-red-200 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>
+            Tanks currently show {overTrackedFish.toLocaleString()} more fish than your active batch totals. Review tank counts and recent mortality or harvest updates.
+          </span>
+        </div>
+      ) : null}
 
       {showUpgradeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -583,6 +715,10 @@ export default function TanksPage() {
                 totalFishTarget > 0
                   ? `${totalFish.toLocaleString()} / ${totalFishTarget.toLocaleString()} (${overallFishLoadPct}%)`
                   : totalFish.toLocaleString(),
+            },
+            {
+              label: "Batch Fish Alive / Unassigned",
+              value: `${totalBatchFishAlive.toLocaleString()} / ${unassignedFish.toLocaleString()}`,
             },
           ].map(({ label, value }) => (
             <div key={label} className="glass-card px-4 py-3">
@@ -997,6 +1133,7 @@ export default function TanksPage() {
                     required
                     min={1}
                     type="number"
+                    placeholder="250"
                     value={moveForm.count}
                     onChange={(e) =>
                       setMoveForm((f) => ({ ...f, count: e.target.value }))
@@ -1020,15 +1157,19 @@ export default function TanksPage() {
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">
                     Date *
                   </label>
-                  <input
-                    className="field"
-                    required
-                    type="date"
-                    value={moveForm.date}
-                    onChange={(e) =>
-                      setMoveForm((f) => ({ ...f, date: e.target.value }))
-                    }
-                  />
+                  <div className="date-field-wrap">
+                    <span className="date-field-badge" />
+                    <CalendarDays className="date-field-icon h-5 w-5 text-pond-200/80" strokeWidth={2.25} />
+                    <input
+                      className="field"
+                      required
+                      type="date"
+                      value={moveForm.date}
+                      onChange={(e) =>
+                        setMoveForm((f) => ({ ...f, date: e.target.value }))
+                      }
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">
@@ -1057,6 +1198,7 @@ export default function TanksPage() {
                 <textarea
                   className="field resize-none"
                   rows={2}
+                  placeholder="Sorted larger fish into Tank 2 after grading"
                   value={moveForm.notes}
                   onChange={(e) =>
                     setMoveForm((f) => ({ ...f, notes: e.target.value }))
@@ -1090,6 +1232,133 @@ export default function TanksPage() {
         </div>
       )}
 
+      {showAllocateModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{
+            background: "rgba(12, 12, 14,0.85)",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          <div className="glass-card w-full max-w-lg max-h-[85vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="font-display text-lg text-pond-100">Allocate Batch Fish</h2>
+              <button
+                onClick={() => setShowAllocateModal(false)}
+                className="text-pond-200/75 hover:text-pond-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={submitAllocation} className="space-y-4">
+              {allocateError ? (
+                <div className="rounded-xl px-3 py-2 text-sm text-danger border border-red-400/30 bg-red-500/10">
+                  {allocateError}
+                </div>
+              ) : null}
+              <div>
+                <label className="block text-xs text-pond-300 mb-1.5 font-medium">
+                  Batch *
+                </label>
+                <select
+                  className="field"
+                  required
+                  value={allocateForm.batchId}
+                  onChange={(e) =>
+                    setAllocateForm((f) => ({ ...f, batchId: e.target.value }))
+                  }
+                >
+                  <option value="">Select batch…</option>
+                  {batches.map((batch) => {
+                    const allocated = (batch.tankAllocations || []).reduce(
+                      (sum, item) => sum + Number(item?.fishCount || 0),
+                      0,
+                    );
+                    const remaining = Math.max(0, Number(batch.currentCount || 0) - allocated);
+                    return (
+                      <option key={batch._id} value={batch._id}>
+                        {batch.name} ({remaining.toLocaleString()} unassigned)
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-pond-300 mb-1.5 font-medium">
+                  Destination Tank *
+                </label>
+                <select
+                  className="field"
+                  required
+                  value={allocateForm.tankId}
+                  onChange={(e) =>
+                    setAllocateForm((f) => ({ ...f, tankId: e.target.value }))
+                  }
+                >
+                  <option value="">Select tank…</option>
+                  {sortedTanks.map((tank) => {
+                    const target = Number(tank.targetFishCapacity || 0);
+                    const current = Number(tank.currentFish || 0);
+                    const remaining = target > 0 ? Math.max(0, target - current) : null;
+                    return (
+                      <option key={tank._id} value={tank._id}>
+                        {tank.name}{remaining != null ? ` (${remaining.toLocaleString()} room)` : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-pond-300 mb-1.5 font-medium">
+                  Fish to Allocate *
+                </label>
+                <input
+                  className="field"
+                  type="number"
+                  min={1}
+                  placeholder="500"
+                  required
+                  value={allocateForm.count}
+                  onChange={(e) =>
+                    setAllocateForm((f) => ({ ...f, count: e.target.value }))
+                  }
+                />
+                <p className="text-[11px] text-pond-200/65 mt-1">
+                  Batch available: {selectedBatchUnassigned.toLocaleString()}
+                  {Number.isFinite(allocateTankRemaining)
+                    ? ` • Tank room: ${Math.max(0, allocateTankRemaining).toLocaleString()}`
+                    : ""}
+                </p>
+                {(allocationExceedsBatch || allocationExceedsTank) ? (
+                  <p className="text-[11px] text-danger mt-1">
+                    {allocationExceedsBatch
+                      ? "Allocation exceeds the batch's unassigned fish."
+                      : "Allocation exceeds the destination tank capacity."}
+                  </p>
+                ) : null}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAllocateModal(false)}
+                  className="btn-secondary flex-1"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving || !allocateFormValid}
+                  className="btn-primary flex-1"
+                >
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  {saving ? "Allocating..." : "Allocate Fish"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {showCreate && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -1116,6 +1385,7 @@ export default function TanksPage() {
                 <input
                   className="field"
                   required
+                  placeholder="Tank 1"
                   value={createForm.name}
                   onChange={(e) =>
                     setCreateForm((f) => ({ ...f, name: e.target.value }))
@@ -1153,6 +1423,7 @@ export default function TanksPage() {
                     type="number"
                     min={1}
                     required
+                    placeholder="5000"
                     value={createForm.capacity}
                     onChange={(e) =>
                       setCreateForm((f) => ({ ...f, capacity: e.target.value }))
@@ -1194,6 +1465,7 @@ export default function TanksPage() {
                     className="field"
                     type="number"
                     min={0}
+                    placeholder="800"
                     value={createForm.currentFish}
                     onChange={(e) =>
                       setCreateForm((f) => ({
@@ -1215,6 +1487,7 @@ export default function TanksPage() {
                   className="field"
                   type="number"
                   min={0}
+                  placeholder="1000"
                   value={createForm.targetFishCapacity}
                   onChange={(e) =>
                     setCreateForm((f) => ({
@@ -1230,6 +1503,7 @@ export default function TanksPage() {
                 </label>
                 <input
                   className="field"
+                  placeholder="12ft x 10ft x 4ft"
                   value={createForm.dimensions}
                   onChange={(e) =>
                     setCreateForm((f) => ({ ...f, dimensions: e.target.value }))
@@ -1243,6 +1517,7 @@ export default function TanksPage() {
                 <textarea
                   className="field resize-none"
                   rows={2}
+                  placeholder="Main juvenile tank near inlet"
                   value={createForm.notes}
                   onChange={(e) =>
                     setCreateForm((f) => ({ ...f, notes: e.target.value }))
@@ -1301,6 +1576,7 @@ export default function TanksPage() {
                 <input
                   className="field"
                   required
+                  placeholder="Tank 1"
                   value={editForm.name}
                   onChange={(e) =>
                     setEditForm((f) => ({ ...f, name: e.target.value }))
@@ -1338,6 +1614,7 @@ export default function TanksPage() {
                     type="number"
                     min={1}
                     required
+                    placeholder="5000"
                     value={editForm.capacity}
                     onChange={(e) =>
                       setEditForm((f) => ({ ...f, capacity: e.target.value }))
@@ -1379,6 +1656,7 @@ export default function TanksPage() {
                     className="field"
                     type="number"
                     min={0}
+                    placeholder="800"
                     value={editForm.currentFish}
                     onChange={(e) =>
                       setEditForm((f) => ({
@@ -1400,6 +1678,7 @@ export default function TanksPage() {
                   className="field"
                   type="number"
                   min={0}
+                  placeholder="1000"
                   value={editForm.targetFishCapacity}
                   onChange={(e) =>
                     setEditForm((f) => ({
@@ -1415,6 +1694,7 @@ export default function TanksPage() {
                 </label>
                 <input
                   className="field"
+                  placeholder="12ft x 10ft x 4ft"
                   value={editForm.dimensions}
                   onChange={(e) =>
                     setEditForm((f) => ({ ...f, dimensions: e.target.value }))
@@ -1428,6 +1708,7 @@ export default function TanksPage() {
                 <textarea
                   className="field resize-none"
                   rows={2}
+                  placeholder="Main juvenile tank near inlet"
                   value={editForm.notes}
                   onChange={(e) =>
                     setEditForm((f) => ({ ...f, notes: e.target.value }))

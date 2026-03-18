@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Fish, Loader2, X, Calendar, Package, Search, Trash2 } from "lucide-react";
+import { Plus, Fish, Loader2, X, Calendar, CalendarDays, Package, Search, Trash2 } from "lucide-react";
 import { weeksSince, getBatchPhase, calcSurvivalRate } from "@/lib/utils";
 import CurrentPlanBadge from "@/components/billing/CurrentPlanBadge";
 import Link from "next/link";
@@ -466,29 +466,33 @@ export default function BatchesPage() {
             <form onSubmit={create} className="space-y-4">
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Batch Name</label>
-                <input className="field" required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+                <input className="field" required placeholder="Batch A - January Juveniles" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Fish Count</label>
-                  <input className="field" type="number" min={1} required value={form.initialCount} onChange={(e) => setForm((f) => ({ ...f, initialCount: +e.target.value }))} />
+                  <input className="field" type="number" min={1} required placeholder="1000" value={form.initialCount} onChange={(e) => setForm((f) => ({ ...f, initialCount: +e.target.value }))} />
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Juvenile Cost (₦)</label>
-                  <input className="field" type="number" min={0} value={form.juvenileCost} onChange={(e) => setForm((f) => ({ ...f, juvenileCost: +e.target.value }))} />
+                  <input className="field" type="number" min={0} placeholder="450000" value={form.juvenileCost} onChange={(e) => setForm((f) => ({ ...f, juvenileCost: +e.target.value }))} />
                 </div>
               </div>
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Target Weight (g)</label>
-                <input className="field" type="number" min={1} value={form.targetWeight} onChange={(e) => setForm((f) => ({ ...f, targetWeight: +e.target.value }))} />
+                <input className="field" type="number" min={1} placeholder="1200" value={form.targetWeight} onChange={(e) => setForm((f) => ({ ...f, targetWeight: +e.target.value }))} />
               </div>
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Stocking Date</label>
-                <input className="field" type="date" required value={form.stockingDate} onChange={(e) => setForm((f) => ({ ...f, stockingDate: e.target.value }))} />
+                <div className="date-field-wrap">
+                  <span className="date-field-badge" />
+                  <CalendarDays className="date-field-icon h-5 w-5 text-pond-200/80" strokeWidth={2.25} />
+                  <input className="field" type="date" required value={form.stockingDate} onChange={(e) => setForm((f) => ({ ...f, stockingDate: e.target.value }))} />
+                </div>
               </div>
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Notes</label>
-                <textarea className="field resize-none" rows={2} value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
+                <textarea className="field resize-none" rows={2} placeholder="Stocked from Ibadan hatchery" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowForm(false)} className="btn-secondary flex-1">Cancel</button>
@@ -514,29 +518,33 @@ export default function BatchesPage() {
             <form onSubmit={saveEdit} className="space-y-4">
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Batch Name</label>
-                <input className="field" required value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} />
+                <input className="field" required placeholder="Batch A - January Juveniles" value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Fish Count</label>
-                  <input className="field" type="number" min={1} required value={editForm.initialCount} onChange={(e) => setEditForm((f) => ({ ...f, initialCount: +e.target.value }))} />
+                  <input className="field" type="number" min={1} required placeholder="1000" value={editForm.initialCount} onChange={(e) => setEditForm((f) => ({ ...f, initialCount: +e.target.value }))} />
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Juvenile Cost (₦)</label>
-                  <input className="field" type="number" min={0} value={editForm.juvenileCost} onChange={(e) => setEditForm((f) => ({ ...f, juvenileCost: +e.target.value }))} />
+                  <input className="field" type="number" min={0} placeholder="450000" value={editForm.juvenileCost} onChange={(e) => setEditForm((f) => ({ ...f, juvenileCost: +e.target.value }))} />
                 </div>
               </div>
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Target Weight (g)</label>
-                <input className="field" type="number" min={1} value={editForm.targetWeight} onChange={(e) => setEditForm((f) => ({ ...f, targetWeight: +e.target.value }))} />
+                <input className="field" type="number" min={1} placeholder="1200" value={editForm.targetWeight} onChange={(e) => setEditForm((f) => ({ ...f, targetWeight: +e.target.value }))} />
               </div>
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Stocking Date</label>
-                <input className="field" type="date" required value={editForm.stockingDate} onChange={(e) => setEditForm((f) => ({ ...f, stockingDate: e.target.value }))} />
+                <div className="date-field-wrap">
+                  <span className="date-field-badge" />
+                  <CalendarDays className="date-field-icon h-5 w-5 text-pond-200/80" strokeWidth={2.25} />
+                  <input className="field" type="date" required value={editForm.stockingDate} onChange={(e) => setEditForm((f) => ({ ...f, stockingDate: e.target.value }))} />
+                </div>
               </div>
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Notes</label>
-                <textarea className="field resize-none" rows={2} value={editForm.notes} onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))} />
+                <textarea className="field resize-none" rows={2} placeholder="Stocked from Ibadan hatchery" value={editForm.notes} onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))} />
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => { setShowEditForm(false); setEditingBatchId(null); }} className="btn-secondary flex-1">Cancel</button>
@@ -562,21 +570,25 @@ export default function BatchesPage() {
             <form onSubmit={confirmHarvest} className="space-y-4">
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Harvest Date</label>
-                <input className="field" type="date" required value={harvestForm.harvestDate} onChange={(e) => setHarvestForm((f) => ({ ...f, harvestDate: e.target.value }))} />
+                <div className="date-field-wrap">
+                  <span className="date-field-badge" />
+                  <CalendarDays className="date-field-icon h-5 w-5 text-pond-200/80" strokeWidth={2.25} />
+                  <input className="field" type="date" required value={harvestForm.harvestDate} onChange={(e) => setHarvestForm((f) => ({ ...f, harvestDate: e.target.value }))} />
+                </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Harvested Weight (kg)</label>
-                  <input className="field" type="number" min={0} step="0.1" value={harvestForm.harvestedWeightKg} onChange={(e) => setHarvestForm((f) => ({ ...f, harvestedWeightKg: +e.target.value }))} />
+                  <input className="field" type="number" min={0} step="0.1" placeholder="850" value={harvestForm.harvestedWeightKg} onChange={(e) => setHarvestForm((f) => ({ ...f, harvestedWeightKg: +e.target.value }))} />
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Price/kg (₦)</label>
-                  <input className="field" type="number" min={0} value={harvestForm.harvestPricePerKg} onChange={(e) => setHarvestForm((f) => ({ ...f, harvestPricePerKg: +e.target.value }))} />
+                  <input className="field" type="number" min={0} placeholder="2200" value={harvestForm.harvestPricePerKg} onChange={(e) => setHarvestForm((f) => ({ ...f, harvestPricePerKg: +e.target.value }))} />
                 </div>
               </div>
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Harvest Notes</label>
-                <textarea className="field resize-none" rows={2} value={harvestForm.harvestNotes} onChange={(e) => setHarvestForm((f) => ({ ...f, harvestNotes: e.target.value }))} />
+                <textarea className="field resize-none" rows={2} placeholder="Sold to local market buyers" value={harvestForm.harvestNotes} onChange={(e) => setHarvestForm((f) => ({ ...f, harvestNotes: e.target.value }))} />
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => { setShowHarvestForm(false); setHarvestBatchId(null); }} className="btn-secondary flex-1">Cancel</button>

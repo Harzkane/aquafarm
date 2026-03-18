@@ -483,7 +483,7 @@ export default function MortalityPage() {
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Deaths</label>
-                  <input className="field" type="number" min={0} value={editForm.mortality} onChange={(e) => setEditForm((f) => ({ ...f, mortality: e.target.value }))} />
+                  <input className="field" type="number" min={0} placeholder="12" value={editForm.mortality} onChange={(e) => setEditForm((f) => ({ ...f, mortality: e.target.value }))} />
                 </div>
               </div>
 
@@ -496,7 +496,7 @@ export default function MortalityPage() {
 
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Observations</label>
-                <textarea className="field resize-none" rows={2} value={editForm.observations} onChange={(e) => setEditForm((f) => ({ ...f, observations: e.target.value }))} />
+                <textarea className="field resize-none" rows={2} placeholder="Found floating fish near outlet pipe" value={editForm.observations} onChange={(e) => setEditForm((f) => ({ ...f, observations: e.target.value }))} />
               </div>
 
               <div className="flex gap-3 pt-2">

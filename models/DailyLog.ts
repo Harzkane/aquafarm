@@ -9,6 +9,8 @@ const DailyLogSchema = new Schema({
   feedSession:   { type: String, enum: ["morning", "evening"], default: "morning" },
   feedGiven:     { type: Number, default: 0 },    // kg
   feedType:      String,
+  feedBrand:     String,
+  feedSizeMm:    Number,
   mortality:     { type: Number, default: 0 },    // count
   mortalityCause: String,
   fishCount:     Number,

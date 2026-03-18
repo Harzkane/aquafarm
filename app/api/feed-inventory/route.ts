@@ -4,10 +4,12 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { FeedInventory } from "@/models/FeedInventory";
 import { DailyLog } from "@/models/DailyLog";
+import { summarizeFeedInventory, getFeedIdentity } from "@/lib/feed-inventory";
 
 type PurchasePayload = {
   date?: string;
   brand: string;
+  pelletSizeMm?: number | null;
   bagSizeKg: number;
   bags: number;
   unitPrice: number;
@@ -19,12 +21,16 @@ function validatePayload(body: any): { ok: true; value: PurchasePayload } | { ok
   const date = body?.date ? new Date(body.date) : new Date();
   if (Number.isNaN(date.getTime())) return { ok: false, error: "Invalid purchase date" };
 
-  const brand = String(body?.brand || "").trim();
+  const identity = getFeedIdentity({
+    brand: String(body?.brand || "").trim(),
+    pelletSizeMm: body?.pelletSizeMm,
+    feedType: String(body?.brand || "").trim(),
+  });
   const bagSizeKg = Number(body?.bagSizeKg || 0);
   const bags = Number(body?.bags || 0);
   const unitPrice = Number(body?.unitPrice || 0);
 
-  if (!brand) return { ok: false, error: "Feed brand/type is required" };
+  if (!identity.brand) return { ok: false, error: "Feed brand/type is required" };
   if (!Number.isFinite(bagSizeKg) || bagSizeKg <= 0) return { ok: false, error: "Bag size must be greater than 0" };
   if (!Number.isFinite(bags) || bags <= 0) return { ok: false, error: "Number of bags must be greater than 0" };
   if (!Number.isFinite(unitPrice) || unitPrice < 0) return { ok: false, error: "Unit price cannot be negative" };
@@ -33,7 +39,8 @@ function validatePayload(body: any): { ok: true; value: PurchasePayload } | { ok
     ok: true,
     value: {
       date: date.toISOString(),
-      brand,
+      brand: identity.brand,
+      pelletSizeMm: identity.pelletSizeMm,
       bagSizeKg,
       bags,
       unitPrice,
@@ -52,38 +59,33 @@ export async function GET() {
 
   const [inventory, logs] = await Promise.all([
     FeedInventory.findOne({ userId }).lean<any>(),
-    DailyLog.find({ userId }).select("feedGiven date").lean<any[]>(),
+    DailyLog.find({ userId }).select("feedGiven date feedType feedBrand feedSizeMm").lean<any[]>(),
   ]);
 
   const purchases = (inventory?.purchases || []).slice().sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  const openingStockKg = Number(inventory?.openingStockKg || 0);
-  const purchasedKg = purchases.reduce((s: number, p: any) => s + Number(p.totalKg || 0), 0);
-  const purchasedCost = purchases.reduce((s: number, p: any) => s + Number(p.totalCost || 0), 0);
-  const consumedKg = logs.reduce((s: number, l: any) => s + Number(l.feedGiven || 0), 0);
-  const remainingKg = Math.max(0, openingStockKg + purchasedKg - consumedKg);
-
-  const last14 = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
-  const logs14 = logs.filter((l: any) => new Date(l.date).getTime() >= last14.getTime());
-  const consumed14 = logs14.reduce((s: number, l: any) => s + Number(l.feedGiven || 0), 0);
-  const feedingDays14 = new Set(
-    logs14
-      .filter((l: any) => Number(l.feedGiven || 0) > 0)
-      .map((l: any) => new Date(l.date).toISOString().slice(0, 10))
-  ).size;
-  const avgDailyUse = feedingDays14 > 0 ? consumed14 / feedingDays14 : 0;
-  const estimatedDaysLeft = avgDailyUse > 0 ? remainingKg / avgDailyUse : null;
+  const summary = summarizeFeedInventory(
+    {
+      openingStockKg: inventory?.openingStockKg,
+      openingStockBrand: inventory?.openingStockBrand,
+      openingStockSizeMm: inventory?.openingStockSizeMm,
+      purchases,
+    },
+    logs
+  );
 
   return NextResponse.json({
-    openingStockKg,
+    openingStockKg: summary.openingStockKg,
+    openingStockBrand: inventory?.openingStockBrand || "",
+    openingStockSizeMm: inventory?.openingStockSizeMm ?? null,
     purchases,
+    products: summary.products,
+    lowStockProducts: summary.lowStockProducts,
     totals: {
-      purchasedKg,
-      purchasedCost,
-      consumedKg,
-      remainingKg,
-      avgDailyUse,
-      estimatedDaysLeft,
-      feedingDays14,
+      stockedKg: summary.stockedKg,
+      purchasedKg: summary.purchasedKg,
+      purchasedCost: summary.purchasedCost,
+      consumedKg: summary.consumedKg,
+      remainingKg: summary.remainingKg,
     },
   });
 }
@@ -109,6 +111,7 @@ export async function POST(req: NextRequest) {
   inventory.purchases.push({
     date: payload.date ? new Date(payload.date) : new Date(),
     brand: payload.brand,
+    pelletSizeMm: payload.pelletSizeMm ?? null,
     bagSizeKg: payload.bagSizeKg,
     bags: payload.bags,
     totalKg,
@@ -129,6 +132,10 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json();
   const openingStockKg = Number(body?.openingStockKg);
+  const identity = getFeedIdentity({
+    brand: String(body?.openingStockBrand || "").trim(),
+    pelletSizeMm: body?.openingStockSizeMm,
+  });
   if (!Number.isFinite(openingStockKg) || openingStockKg < 0) {
     return NextResponse.json({ error: "Opening stock must be a non-negative number" }, { status: 400 });
   }
@@ -137,7 +144,14 @@ export async function PATCH(req: NextRequest) {
   await connectDB();
   const inventory = await FeedInventory.findOneAndUpdate(
     { userId },
-    { $set: { openingStockKg, updatedAt: new Date() } },
+    {
+      $set: {
+        openingStockKg,
+        openingStockBrand: identity.brand,
+        openingStockSizeMm: identity.pelletSizeMm,
+        updatedAt: new Date(),
+      },
+    },
     { upsert: true, new: true }
   );
   return NextResponse.json(inventory);

@@ -45,6 +45,8 @@ export default function AuditPage() {
   const [query, setQuery] = useState("");
   const [resourceFilter, setResourceFilter] = useState<ResourceFilter>("all");
   const [logs, setLogs] = useState<AuditItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     (async () => {
@@ -72,6 +74,20 @@ export default function AuditPage() {
       return text.includes(q);
     });
   }, [logs, query, resourceFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, resourceFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginatedLogs = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   if (loading) {
     return (
@@ -130,8 +146,9 @@ export default function AuditPage() {
         {filtered.length === 0 ? (
           <div className="p-10 text-center text-sm text-pond-200/70">No audit events found.</div>
         ) : (
-          <div className="divide-y divide-pond-700/20">
-            {filtered.map((log) => (
+          <>
+            <div className="divide-y divide-pond-700/20">
+            {paginatedLogs.map((log) => (
               <div key={log._id} className="px-5 py-4 flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-sm text-pond-100 font-medium">{log.summary || `${log.action} ${log.resource}`}</p>
@@ -144,7 +161,33 @@ export default function AuditPage() {
                 </p>
               </div>
             ))}
-          </div>
+            </div>
+            <div className="px-5 py-3 border-t border-pond-700/20 flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-xs text-pond-200/65">
+                Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, filtered.length)} of {filtered.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <select
+                  className="field !h-8 !py-1 text-xs"
+                  value={pageSize}
+                  onChange={(e) => setPageSize(parseInt(e.target.value, 10))}
+                >
+                  <option value={10}>10 / page</option>
+                  <option value={20}>20 / page</option>
+                  <option value={50}>50 / page</option>
+                </select>
+                <button className="btn-secondary !px-3 !py-1.5 text-xs" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
+                  Prev
+                </button>
+                <span className="text-xs text-pond-200/75 font-mono">
+                  {page}/{totalPages}
+                </span>
+                <button className="btn-secondary !px-3 !py-1.5 text-xs" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>
+                  Next
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>

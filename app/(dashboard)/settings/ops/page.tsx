@@ -32,6 +32,8 @@ export default function OpsMonitorPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "success" | "failed">("all");
   const [runs, setRuns] = useState<CronRun[]>([]);
   const [summary, setSummary] = useState<CronSummary[]>([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   async function load() {
     setError("");
@@ -63,6 +65,20 @@ export default function OpsMonitorPage() {
       return text.includes(q);
     });
   }, [runs, query, statusFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRuns.length / pageSize));
+  const paginatedRuns = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredRuns.slice(start, start + pageSize);
+  }, [filteredRuns, page, pageSize]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   const totals = useMemo(() => {
     const total = runs.length;
@@ -180,8 +196,9 @@ export default function OpsMonitorPage() {
         {filteredRuns.length === 0 ? (
           <div className="p-10 text-center text-sm text-pond-200/70">No runs for current filters.</div>
         ) : (
-          <div className="divide-y divide-pond-700/20">
-            {filteredRuns.map((run, idx) => (
+          <>
+            <div className="divide-y divide-pond-700/20">
+            {paginatedRuns.map((run, idx) => (
               <div key={`${run.job}-${run.createdAt}-${idx}`} className="px-5 py-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -208,10 +225,35 @@ export default function OpsMonitorPage() {
                 ) : null}
               </div>
             ))}
-          </div>
+            </div>
+            <div className="px-5 py-3 border-t border-pond-700/20 flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-xs text-pond-200/65">
+                Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, filteredRuns.length)} of {filteredRuns.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <select
+                  className="field !h-8 !py-1 text-xs"
+                  value={pageSize}
+                  onChange={(e) => setPageSize(parseInt(e.target.value, 10))}
+                >
+                  <option value={10}>10 / page</option>
+                  <option value={20}>20 / page</option>
+                  <option value={50}>50 / page</option>
+                </select>
+                <button className="btn-secondary !px-3 !py-1.5 text-xs" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
+                  Prev
+                </button>
+                <span className="text-xs text-pond-200/75 font-mono">
+                  {page}/{totalPages}
+                </span>
+                <button className="btn-secondary !px-3 !py-1.5 text-xs" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>
+                  Next
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </section>
     </div>
   );
 }
-

@@ -127,14 +127,16 @@ export async function POST(req: NextRequest) {
     resource: "daily_log",
     resourceId: log._id.toString(),
     summary: `${auditAction === "create" ? "Created" : "Updated"} daily log for ${batch.name}`,
-    meta: {
-      batchId: batch._id.toString(),
-      batchName: batch.name,
-      feedSession: payload.feedSession || "morning",
-      feedGiven: Number(payload.feedGiven || 0),
-      mortality: Number(payload.mortality || 0),
-      date: logDate.toISOString(),
-    },
+      meta: {
+        batchId: batch._id.toString(),
+        batchName: batch.name,
+        feedSession: payload.feedSession || "morning",
+        feedGiven: Number(payload.feedGiven || 0),
+        feedBrand: payload.feedBrand || "",
+        feedSizeMm: payload.feedSizeMm ?? null,
+        mortality: Number(payload.mortality || 0),
+        date: logDate.toISOString(),
+      },
   }).catch(() => {});
 
   return NextResponse.json(log, { status: 201 });

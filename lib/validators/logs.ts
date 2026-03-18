@@ -1,4 +1,5 @@
 import { Types } from "mongoose";
+import { formatFeedLabel, getFeedIdentity } from "../feed-inventory";
 
 export type LogPayload = {
   batchId: string;
@@ -8,6 +9,8 @@ export type LogPayload = {
   tankName?: string;
   feedGiven?: number;
   feedType?: string;
+  feedBrand?: string;
+  feedSizeMm?: number | null;
   mortality?: number;
   mortalityCause?: string;
   fishCount?: number;
@@ -43,6 +46,11 @@ export function validateLogPayload(body: any): { ok: true; value: LogPayload } |
   const dissolvedO2 = normalizeOptionalNumber(body?.dissolvedO2);
   const waterChanged = Boolean(body?.waterChanged);
   const date = body?.date ? new Date(body.date) : new Date();
+  const feedIdentity = getFeedIdentity({
+    brand: typeof body?.feedBrand === "string" ? body.feedBrand : "",
+    pelletSizeMm: body?.feedSizeMm,
+    feedType: typeof body?.feedType === "string" ? body.feedType : "",
+  });
 
   if (Number.isNaN(date.getTime())) return { ok: false, error: "Invalid log date" };
   if (feedGiven < 0) return { ok: false, error: "Feed given cannot be negative" };
@@ -68,7 +76,9 @@ export function validateLogPayload(body: any): { ok: true; value: LogPayload } |
       tankId: typeof body?.tankId === "string" ? body.tankId.trim() : "",
       tankName: typeof body?.tankName === "string" ? body.tankName.trim() : "",
       feedGiven,
-      feedType: typeof body?.feedType === "string" ? body.feedType.trim() : "",
+      feedType: formatFeedLabel(feedIdentity.brand, feedIdentity.pelletSizeMm),
+      feedBrand: feedIdentity.brand,
+      feedSizeMm: feedIdentity.pelletSizeMm,
       mortality,
       mortalityCause: typeof body?.mortalityCause === "string" ? body.mortalityCause.trim() : "",
       fishCount,
@@ -83,4 +93,3 @@ export function validateLogPayload(body: any): { ok: true; value: LogPayload } |
     },
   };
 }
-

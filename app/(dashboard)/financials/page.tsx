@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState, useEffect } from "react";
-import { TrendingUp, TrendingDown, Plus, Loader2, DollarSign, Search, Pencil, Trash2, Download, X } from "lucide-react";
+import { TrendingUp, TrendingDown, Plus, Loader2, DollarSign, Search, Pencil, Trash2, Download, X, CalendarDays } from "lucide-react";
 import { formatNaira } from "@/lib/utils";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
@@ -676,12 +676,12 @@ export default function FinancialsPage() {
                   </div>
                   <div>
                     <label className="block text-xs text-pond-300 mb-1.5 font-medium">Amount</label>
-                    <input className="field" type="number" min={1} value={editExpense.amount} onChange={(e) => setEditExpense((f) => ({ ...f, amount: e.target.value }))} />
+                    <input className="field" type="number" min={1} placeholder="18500" value={editExpense.amount} onChange={(e) => setEditExpense((f) => ({ ...f, amount: e.target.value }))} />
                   </div>
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Description</label>
-                  <input className="field" value={editExpense.description} onChange={(e) => setEditExpense((f) => ({ ...f, description: e.target.value }))} />
+                  <input className="field" placeholder="Aller Aqua 15kg bags × 3" value={editExpense.description} onChange={(e) => setEditExpense((f) => ({ ...f, description: e.target.value }))} />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -693,7 +693,11 @@ export default function FinancialsPage() {
                   </div>
                   <div>
                     <label className="block text-xs text-pond-300 mb-1.5 font-medium">Date</label>
-                    <input className="field" type="date" value={editExpense.date} onChange={(e) => setEditExpense((f) => ({ ...f, date: e.target.value }))} />
+                    <div className="date-field-wrap">
+                      <span className="date-field-badge" />
+                      <CalendarDays className="date-field-icon h-5 w-5 text-pond-200/80" strokeWidth={2.25} />
+                      <input className="field" type="date" value={editExpense.date} onChange={(e) => setEditExpense((f) => ({ ...f, date: e.target.value }))} />
+                    </div>
                   </div>
                 </div>
                 <div className="flex gap-3 pt-2">
@@ -706,21 +710,21 @@ export default function FinancialsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-xs text-pond-300 mb-1.5 font-medium">Fish Sold</label>
-                    <input className="field" type="number" min={0} value={editRevenue.fishSold} onChange={(e) => setEditRevenue((f) => ({ ...f, fishSold: e.target.value }))} />
+                    <input className="field" type="number" min={0} placeholder="320" value={editRevenue.fishSold} onChange={(e) => setEditRevenue((f) => ({ ...f, fishSold: e.target.value }))} />
                   </div>
                   <div>
                     <label className="block text-xs text-pond-300 mb-1.5 font-medium">Weight Kg</label>
-                    <input className="field" type="number" min={0} step="0.1" value={editRevenue.weightKg} onChange={(e) => setEditRevenue((f) => ({ ...f, weightKg: e.target.value }))} />
+                    <input className="field" type="number" min={0} step="0.1" placeholder="640" value={editRevenue.weightKg} onChange={(e) => setEditRevenue((f) => ({ ...f, weightKg: e.target.value }))} />
                   </div>
                   <div>
                     <label className="block text-xs text-pond-300 mb-1.5 font-medium">Price/Kg</label>
-                    <input className="field" type="number" min={0} value={editRevenue.pricePerKg} onChange={(e) => setEditRevenue((f) => ({ ...f, pricePerKg: e.target.value }))} />
+                    <input className="field" type="number" min={0} placeholder="2800" value={editRevenue.pricePerKg} onChange={(e) => setEditRevenue((f) => ({ ...f, pricePerKg: e.target.value }))} />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-pond-300 mb-1.5 font-medium">Buyer</label>
-                    <input className="field" value={editRevenue.buyer} onChange={(e) => setEditRevenue((f) => ({ ...f, buyer: e.target.value }))} />
+                    <input className="field" placeholder="Mama Nkechi POK" value={editRevenue.buyer} onChange={(e) => setEditRevenue((f) => ({ ...f, buyer: e.target.value }))} />
                   </div>
                   <div>
                     <label className="block text-xs text-pond-300 mb-1.5 font-medium">Channel</label>
@@ -739,7 +743,11 @@ export default function FinancialsPage() {
                   </div>
                   <div>
                     <label className="block text-xs text-pond-300 mb-1.5 font-medium">Date</label>
-                    <input className="field" type="date" value={editRevenue.date} onChange={(e) => setEditRevenue((f) => ({ ...f, date: e.target.value }))} />
+                    <div className="date-field-wrap">
+                      <span className="date-field-badge" />
+                      <CalendarDays className="date-field-icon h-5 w-5 text-pond-200/80" strokeWidth={2.25} />
+                      <input className="field" type="date" value={editRevenue.date} onChange={(e) => setEditRevenue((f) => ({ ...f, date: e.target.value }))} />
+                    </div>
                   </div>
                 </div>
                 <div className="flex gap-3 pt-2">

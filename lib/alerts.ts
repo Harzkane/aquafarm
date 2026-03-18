@@ -8,6 +8,7 @@ import { User } from "@/models/User";
 import { AlertNotification } from "@/models/AlertNotification";
 import { getPlanConfig } from "@/lib/plans";
 import { weeksSince } from "@/lib/utils";
+import { summarizeFeedInventory } from "@/lib/feed-inventory";
 
 type AlertSeverity = "info" | "warning" | "critical";
 
@@ -52,7 +53,6 @@ function toFiniteNumber(v: unknown) {
 
 export async function collectAlertCandidates(userId: string, now = new Date()) {
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
   const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
   const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
@@ -68,7 +68,7 @@ export async function collectAlertCandidates(userId: string, now = new Date()) {
       })
         .select("_id name status stockingDate initialCount currentCount")
         .lean<any[]>(),
-      FeedInventory.findOne({ userId }).select("openingStockKg purchases").lean<any>(),
+      FeedInventory.findOne({ userId }).select("openingStockKg openingStockBrand openingStockSizeMm purchases").lean<any>(),
       Financial.findOne({ userId }).select("expenses revenue").lean<any>(),
       CalendarEvent.find({ userId }).select("batchId kind milestoneWeek").lean<any[]>(),
       CronRun.countDocuments({ status: "failed", createdAt: { $gte: oneDayAgo } }),
@@ -80,7 +80,7 @@ export async function collectAlertCandidates(userId: string, now = new Date()) {
   const plan = getPlanConfig(owner.plan);
   const batchIds = batches.map((b) => b._id);
 
-  const [logs30d, logs14d, logs3d, consumedFeedResult] = await Promise.all([
+  const [logs30d, feedLogs, logs3d] = await Promise.all([
     DailyLog.find({
       userId,
       ...(batchIds.length ? { batchId: { $in: batchIds } } : {}),
@@ -90,9 +90,8 @@ export async function collectAlertCandidates(userId: string, now = new Date()) {
       .lean<any[]>(),
     DailyLog.find({
       userId,
-      date: { $gte: fourteenDaysAgo },
     })
-      .select("date feedGiven")
+      .select("date feedGiven feedType feedBrand feedSizeMm")
       .lean<any[]>(),
     DailyLog.find({
       userId,
@@ -101,7 +100,6 @@ export async function collectAlertCandidates(userId: string, now = new Date()) {
     })
       .select("date mortality ph ammonia")
       .lean<any[]>(),
-    DailyLog.aggregate([{ $match: { userId: (owner as any)._id } }, { $group: { _id: null, total: { $sum: "$feedGiven" } } }]),
   ]);
 
   const alerts: AlertCandidate[] = [];
@@ -214,32 +212,27 @@ export async function collectAlertCandidates(userId: string, now = new Date()) {
     });
   }
 
-  const purchasedFeedKg = (feedInventory?.purchases || []).reduce(
-    (sum: number, p: any) => sum + toFiniteNumber(p.totalKg),
-    0
-  );
-  const openingFeedKg = toFiniteNumber(feedInventory?.openingStockKg);
-  const totalConsumedFeedKg = toFiniteNumber(consumedFeedResult?.[0]?.total);
-  const remainingFeedKg = Math.max(0, openingFeedKg + purchasedFeedKg - totalConsumedFeedKg);
-  const consumed14 = logs14d.reduce((sum, log) => sum + toFiniteNumber(log.feedGiven), 0);
-  const feedingDays14 = new Set(
-    logs14d
-      .filter((log) => toFiniteNumber(log.feedGiven) > 0)
-      .map((log) => new Date(log.date).toISOString().slice(0, 10))
-  ).size;
-  const avgDailyUse = feedingDays14 > 0 ? consumed14 / feedingDays14 : 0;
-  const lowStockThreshold = Math.max(50, avgDailyUse * 7);
-
-  if (remainingFeedKg <= lowStockThreshold && remainingFeedKg > 0) {
-    const severity: AlertSeverity = remainingFeedKg <= Math.max(25, avgDailyUse * 3) ? "critical" : "warning";
+  const feedSummary = summarizeFeedInventory(feedInventory, feedLogs);
+  const mostUrgentFeed = feedSummary.lowStockProducts[0];
+  if (mostUrgentFeed) {
+    const severity: AlertSeverity = mostUrgentFeed.lowStockSeverity === "critical" ? "critical" : "warning";
     alerts.push({
-      key: "feed:stock-low",
+      key: `feed:stock-low:${mostUrgentFeed.key}`,
       source: "feed-inventory",
       severity,
-      title: "Feed stock running low",
-      message: `${remainingFeedKg.toFixed(1)}kg remaining based on current consumption trend.`,
+      title: `${mostUrgentFeed.label} running low`,
+      message:
+        mostUrgentFeed.estimatedDaysLeft != null
+          ? `${mostUrgentFeed.remainingKg.toFixed(2)}kg left, about ${mostUrgentFeed.estimatedDaysLeft.toFixed(1)} feeding days remaining.`
+          : `${mostUrgentFeed.remainingKg.toFixed(2)}kg left. Recent usage is not enough to forecast days left.`,
       href: "/feed-inventory",
-      meta: { remainingFeedKg, avgDailyUse },
+      meta: {
+        feedKey: mostUrgentFeed.key,
+        feedLabel: mostUrgentFeed.label,
+        remainingFeedKg: mostUrgentFeed.remainingKg,
+        avgDailyUse: mostUrgentFeed.avgDailyUse,
+        estimatedDaysLeft: mostUrgentFeed.estimatedDaysLeft,
+      },
     });
   }
 

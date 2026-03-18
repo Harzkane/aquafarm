@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, ShoppingBasket, Search } from "lucide-react";
+import { Loader2, Plus, ShoppingBasket, Search, CalendarDays } from "lucide-react";
 import { formatNaira } from "@/lib/utils";
 
 type Batch = { _id: string; name: string; status?: string };
@@ -200,27 +200,31 @@ export default function HarvestPage() {
             </div>
             <div>
               <label className="block text-xs text-pond-300 mb-1.5 font-medium">Harvest Date</label>
-              <input className="field" type="date" value={form.date} onChange={(e) => update("date", e.target.value)} />
+              <div className="date-field-wrap">
+                <span className="date-field-badge" />
+                <CalendarDays className="date-field-icon h-5 w-5 text-pond-200/80" strokeWidth={2.25} />
+                <input className="field" type="date" value={form.date} onChange={(e) => update("date", e.target.value)} />
+              </div>
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs text-pond-300 mb-1.5 font-medium">Fish Sold</label>
-              <input className="field" type="number" min={0} value={form.fishSold} onChange={(e) => update("fishSold", e.target.value)} />
+              <input className="field" type="number" min={0} placeholder="420" value={form.fishSold} onChange={(e) => update("fishSold", e.target.value)} />
             </div>
             <div>
               <label className="block text-xs text-pond-300 mb-1.5 font-medium">Weight (kg) *</label>
-              <input className="field" type="number" min={0.1} step="0.1" required value={form.weightKg} onChange={(e) => update("weightKg", e.target.value)} />
+              <input className="field" type="number" min={0.1} step="0.1" required placeholder="850" value={form.weightKg} onChange={(e) => update("weightKg", e.target.value)} />
             </div>
             <div>
               <label className="block text-xs text-pond-300 mb-1.5 font-medium">Price/kg (₦) *</label>
-              <input className="field" type="number" min={0} required value={form.pricePerKg} onChange={(e) => update("pricePerKg", e.target.value)} />
+              <input className="field" type="number" min={0} required placeholder="2200" value={form.pricePerKg} onChange={(e) => update("pricePerKg", e.target.value)} />
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-pond-300 mb-1.5 font-medium">Buyer</label>
-              <input className="field" value={form.buyer} onChange={(e) => update("buyer", e.target.value)} />
+              <input className="field" placeholder="Kubwa Fish Market" value={form.buyer} onChange={(e) => update("buyer", e.target.value)} />
             </div>
             <div>
               <label className="block text-xs text-pond-300 mb-1.5 font-medium">Channel</label>

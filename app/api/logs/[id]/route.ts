@@ -7,6 +7,7 @@ import { Batch } from "@/models/Batch";
 import { Types } from "mongoose";
 import { recordAuditEvent } from "@/lib/audit";
 import { runAtomic } from "@/lib/transactions";
+import { formatFeedLabel, getFeedIdentity } from "@/lib/feed-inventory";
 
 type LogPatchBody = {
   batchId?: string;
@@ -16,6 +17,8 @@ type LogPatchBody = {
   tankName?: string;
   feedGiven?: number;
   feedType?: string;
+  feedBrand?: string;
+  feedSizeMm?: number | null;
   mortality?: number;
   mortalityCause?: string;
   fishCount?: number;
@@ -55,9 +58,18 @@ function validatePatchBody(body: LogPatchBody): { ok: true; value: Record<string
   }
   if (body.tankId !== undefined) update.tankId = String(body.tankId || "").trim();
   if (body.tankName !== undefined) update.tankName = String(body.tankName || "").trim();
-  if (body.feedType !== undefined) update.feedType = String(body.feedType || "").trim();
   if (body.mortalityCause !== undefined) update.mortalityCause = String(body.mortalityCause || "").trim();
   if (body.observations !== undefined) update.observations = String(body.observations || "").trim();
+  if (body.feedType !== undefined || body.feedBrand !== undefined || body.feedSizeMm !== undefined) {
+    const identity = getFeedIdentity({
+      brand: body.feedBrand,
+      pelletSizeMm: body.feedSizeMm,
+      feedType: body.feedType,
+    });
+    update.feedBrand = identity.brand;
+    update.feedSizeMm = identity.pelletSizeMm;
+    update.feedType = formatFeedLabel(identity.brand, identity.pelletSizeMm);
+  }
 
   if (body.feedGiven !== undefined) {
     const n = Number(body.feedGiven);
@@ -194,6 +206,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       batchName: batch?.name || "",
       feedSession: updatedLog.feedSession || "morning",
       feedGiven: Number(updatedLog.feedGiven || 0),
+      feedBrand: updatedLog.feedBrand || "",
+      feedSizeMm: updatedLog.feedSizeMm ?? null,
       mortality: Number(updatedLog.mortality || 0),
       date: updatedLog.date ? new Date(updatedLog.date).toISOString() : null,
       fields: Object.keys(update),

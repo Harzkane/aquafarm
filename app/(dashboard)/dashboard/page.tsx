@@ -8,6 +8,7 @@ import { Tank } from "@/models/Tank";
 import { FeedInventory } from "@/models/FeedInventory";
 import DashboardClient from "./DashboardClient";
 import { getBatchPhase, weeksSince } from "@/lib/utils";
+import { summarizeFeedInventory } from "@/lib/feed-inventory";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -23,9 +24,12 @@ export default async function DashboardPage() {
   // Get last 30 days of logs for active batches
   const batchIds = batches.map((b: any) => b._id);
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const recentLogs = await DailyLog.find({
-    userId, batchId: { $in: batchIds }, date: { $gte: thirtyDaysAgo }
-  }).sort({ date: 1 }).lean();
+  const [recentLogs, feedLogs] = await Promise.all([
+    DailyLog.find({
+      userId, batchId: { $in: batchIds }, date: { $gte: thirtyDaysAgo }
+    }).sort({ date: 1 }).lean(),
+    DailyLog.find({ userId }).select("date feedGiven feedType feedBrand feedSizeMm").lean(),
+  ]);
 
   // Aggregate stats
   const totalFish    = batches.reduce((s: number, b: any) => s + (b.currentCount || 0), 0);
@@ -121,15 +125,16 @@ export default async function DashboardPage() {
     });
   }
 
-  const openingFeed = Number(feedInventory?.openingStockKg || 0);
-  const purchasedFeed = (feedInventory?.purchases || []).reduce((s: number, p: any) => s + Number(p.totalKg || 0), 0);
-  const consumedFeed = recentLogs.reduce((s: number, l: any) => s + Number(l.feedGiven || 0), 0);
-  const remainingFeed = Math.max(0, openingFeed + purchasedFeed - consumedFeed);
-  if (remainingFeed > 0 && remainingFeed <= 50) {
+  const feedSummary = summarizeFeedInventory(feedInventory, feedLogs as any[]);
+  const mostUrgentFeed = feedSummary.lowStockProducts[0];
+  if (mostUrgentFeed) {
     actions.push({
-      level: "warning",
-      title: "Feed stock running low",
-      detail: `Only about ${remainingFeed.toFixed(1)}kg remains based on logged feed use.`,
+      level: mostUrgentFeed.lowStockSeverity === "critical" ? "danger" : "warning",
+      title: `${mostUrgentFeed.label} running low`,
+      detail:
+        mostUrgentFeed.estimatedDaysLeft != null
+          ? `${mostUrgentFeed.remainingKg.toFixed(2)}kg left, about ${mostUrgentFeed.estimatedDaysLeft.toFixed(1)} feeding days remaining.`
+          : `${mostUrgentFeed.remainingKg.toFixed(2)}kg left. Log recent usage to estimate days remaining.`,
       href: "/feed-inventory",
     });
   }

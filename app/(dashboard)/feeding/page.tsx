@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Loader2, Fish, Droplets, Skull, ThermometerSun, CheckCircle, Search, X, Pencil, Trash2 } from "lucide-react";
+import { formatFeedLabel, getFeedIdentity } from "@/lib/feed-inventory";
 
 const CAUSES = ["Unknown", "Poor water quality", "Disease", "Cannibalism", "Handling stress", "Old age / natural"];
 
@@ -14,6 +15,8 @@ type LogEntry = {
   tankName?: string;
   feedGiven?: number;
   feedType?: string;
+  feedBrand?: string;
+  feedSizeMm?: number | null;
   mortality?: number;
   mortalityCause?: string;
   ph?: number | null;
@@ -30,6 +33,8 @@ type FormState = {
   feedSession: "morning" | "evening";
   feedGiven: string;
   feedType: string;
+  feedBrand: string;
+  feedSizeMm: string;
   mortality: string;
   mortalityCause: string;
   ph: string;
@@ -46,6 +51,8 @@ const initialForm: FormState = {
   feedSession: "morning",
   feedGiven: "",
   feedType: "Aller Aqua 2mm",
+  feedBrand: "Aller Aqua",
+  feedSizeMm: "2",
   mortality: "",
   mortalityCause: "Unknown",
   ph: "",
@@ -56,9 +63,28 @@ const initialForm: FormState = {
   observations: "",
 };
 
+type FeedProductOption = {
+  key: string;
+  label: string;
+  brand: string;
+  pelletSizeMm: number | null;
+};
+
+function getFeedProductKey(values: { feedBrand: string; feedSizeMm: string }, products: FeedProductOption[]) {
+  const identity = getFeedIdentity({
+    brand: values.feedBrand,
+    pelletSizeMm: values.feedSizeMm,
+  });
+  const match = products.find(
+    (product) => product.brand === identity.brand && (product.pelletSizeMm ?? null) === identity.pelletSizeMm
+  );
+  return match?.key || "";
+}
+
 export default function FeedingPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [tankOptions, setTankOptions] = useState<TankOption[]>([]);
+  const [feedProducts, setFeedProducts] = useState<FeedProductOption[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -79,6 +105,8 @@ export default function FeedingPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [createCustomFeed, setCreateCustomFeed] = useState(false);
+  const [editCustomFeed, setEditCustomFeed] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -88,16 +116,18 @@ export default function FeedingPage() {
     setLoading(true);
     setError("");
     try {
-      const [batchesRes, logsRes, tanksRes, billingRes] = await Promise.all([
+      const [batchesRes, logsRes, tanksRes, billingRes, feedInventoryRes] = await Promise.all([
         fetch("/api/batches"),
         fetch("/api/logs?limit=5000"),
         fetch("/api/tanks"),
         fetch("/api/billing/status"),
+        fetch("/api/feed-inventory"),
       ]);
       const batchesPayload = await batchesRes.json();
       const logsPayload = await logsRes.json();
       const tanksPayload = await tanksRes.json();
       const billingPayload = billingRes.ok ? await billingRes.json() : null;
+      const feedInventoryPayload = feedInventoryRes.ok ? await feedInventoryRes.json() : null;
 
       if (!batchesRes.ok) throw new Error(batchesPayload?.error || "Failed to load batches");
       if (!logsRes.ok) throw new Error(logsPayload?.error || "Failed to load logs");
@@ -107,6 +137,7 @@ export default function FeedingPage() {
       setLogs(logsPayload);
       setTankOptions(tanksPayload || []);
       setIsFreePlan((billingPayload?.plan || "free") === "free");
+      setFeedProducts(feedInventoryPayload?.products || []);
     } catch (err: any) {
       setError(err?.message || "Failed to load daily logs");
     } finally {
@@ -116,10 +147,34 @@ export default function FeedingPage() {
 
   const update = (k: keyof FormState, v: any) => setForm((f) => ({ ...f, [k]: v }));
   const updateEdit = (k: keyof FormState, v: any) => setEditForm((f) => ({ ...f, [k]: v }));
+  const applyFeedProduct = (productKey: string, target: "create" | "edit") => {
+    const product = feedProducts.find((item) => item.key === productKey);
+    if (!product) return;
+    const next = {
+      feedBrand: product.brand,
+      feedSizeMm: product.pelletSizeMm != null ? String(product.pelletSizeMm) : "",
+      feedType: formatFeedLabel(product.brand, product.pelletSizeMm),
+    };
+    if (target === "create") {
+      setCreateCustomFeed(false);
+      setForm((f) => ({ ...f, ...next }));
+      return;
+    }
+    setEditCustomFeed(false);
+    setEditForm((f) => ({ ...f, ...next }));
+  };
 
   function toPayload(values: FormState, date?: string) {
+    const feedIdentity = getFeedIdentity({
+      brand: values.feedBrand,
+      pelletSizeMm: values.feedSizeMm,
+      feedType: values.feedType,
+    });
     return {
       ...values,
+      feedType: formatFeedLabel(feedIdentity.brand, feedIdentity.pelletSizeMm),
+      feedBrand: feedIdentity.brand,
+      feedSizeMm: feedIdentity.pelletSizeMm,
       feedGiven: parseFloat(values.feedGiven) || 0,
       mortality: parseInt(values.mortality) || 0,
       feedSession: values.feedSession,
@@ -133,12 +188,19 @@ export default function FeedingPage() {
 
   function fromLog(log: LogEntry): FormState {
     const batchId = typeof log.batchId === "string" ? log.batchId : log.batchId?._id || "";
+    const feedIdentity = getFeedIdentity({
+      brand: log.feedBrand,
+      pelletSizeMm: log.feedSizeMm,
+      feedType: log.feedType,
+    });
     return {
       batchId,
       tankName: log.tankName || "All Tanks",
       feedSession: log.feedSession || "morning",
       feedGiven: log.feedGiven != null ? String(log.feedGiven) : "",
-      feedType: log.feedType || "",
+      feedType: formatFeedLabel(feedIdentity.brand, feedIdentity.pelletSizeMm),
+      feedBrand: feedIdentity.brand,
+      feedSizeMm: feedIdentity.pelletSizeMm != null ? String(feedIdentity.pelletSizeMm) : "",
       mortality: log.mortality != null ? String(log.mortality) : "",
       mortalityCause: log.mortalityCause || "Unknown",
       ph: log.ph != null ? String(log.ph) : "",
@@ -169,6 +231,7 @@ export default function FeedingPage() {
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
       setShowEntryForm(false);
+      setCreateCustomFeed(false);
       setForm((f) => ({ ...f, feedGiven: "", mortality: "", ph: "", ammonia: "", temperature: "", observations: "", waterChangePct: "" }));
     } catch (err: any) {
       setError(err?.message || "Failed to save log entry");
@@ -180,6 +243,7 @@ export default function FeedingPage() {
   function startEdit(log: LogEntry) {
     setEditingLog(log);
     setEditForm(fromLog(log));
+    setEditCustomFeed(false);
     setError("");
   }
 
@@ -257,6 +321,8 @@ export default function FeedingPage() {
   }, [batchFilter, search]);
 
   const totalPages = Math.max(1, Math.ceil(visibleLogs.length / pageSize));
+  const selectedCreateFeedKey = getFeedProductKey(form, feedProducts);
+  const selectedEditFeedKey = getFeedProductKey(editForm, feedProducts);
   const paginatedLogs = useMemo(() => {
     const start = (page - 1) * pageSize;
     return visibleLogs.slice(start, start + pageSize);
@@ -482,16 +548,47 @@ export default function FeedingPage() {
                 <p className="text-xs font-medium text-pond-300 flex items-center gap-1.5">
                   <Droplets className="w-3.5 h-3.5" /> Feeding
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>
                     <label className="block text-xs text-pond-200/75 mb-1">Feed Given (kg)</label>
                     <input className="field" type="number" step="0.1" placeholder="0.0" value={form.feedGiven} onChange={(e) => update("feedGiven", e.target.value)} />
                   </div>
                   <div>
-                    <label className="block text-xs text-pond-200/75 mb-1">Feed Type</label>
-                    <input className="field" placeholder="Aller Aqua 2mm" value={form.feedType} onChange={(e) => update("feedType", e.target.value)} />
+                    <label className="block text-xs text-pond-200/75 mb-1">Inventory Product</label>
+                    <select
+                      className="field"
+                      value={createCustomFeed ? "__custom__" : selectedCreateFeedKey}
+                      onChange={(e) => {
+                        if (e.target.value === "__custom__") {
+                          setCreateCustomFeed(true);
+                          return;
+                        }
+                        applyFeedProduct(e.target.value, "create");
+                      }}
+                    >
+                      <option value="">Pick from inventory…</option>
+                      {feedProducts.map((product) => <option key={product.key} value={product.key}>{product.label}</option>)}
+                      <option value="__custom__">Custom feed</option>
+                    </select>
                   </div>
+                  {createCustomFeed && (
+                    <>
+                      <div>
+                        <label className="block text-xs text-pond-200/75 mb-1">Brand</label>
+                        <input className="field" placeholder="Aller Aqua" value={form.feedBrand} onChange={(e) => update("feedBrand", e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-pond-200/75 mb-1">Pellet Size (mm)</label>
+                        <input className="field" type="number" min="0.1" step="0.1" placeholder="2" value={form.feedSizeMm} onChange={(e) => update("feedSizeMm", e.target.value)} />
+                      </div>
+                    </>
+                  )}
                 </div>
+                {!createCustomFeed && selectedCreateFeedKey ? (
+                  <p className="text-xs text-pond-200/65">
+                    Using inventory product <span className="text-pond-100 font-medium">{form.feedType}</span>.
+                  </p>
+                ) : null}
               </div>
 
               <div className="rounded-xl p-4 space-y-3" style={{ background: "rgba(6,75,113,0.2)", border: "1px solid rgba(0,134,204,0.15)" }}>
@@ -591,22 +688,57 @@ export default function FeedingPage() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Feed (kg)</label>
                   <input className="field" type="number" step="0.1" value={editForm.feedGiven} onChange={(e) => updateEdit("feedGiven", e.target.value)} />
                 </div>
                 <div>
+                  <label className="block text-xs text-pond-300 mb-1.5 font-medium">Inventory Product</label>
+                  <select
+                    className="field"
+                    value={editCustomFeed ? "__custom__" : selectedEditFeedKey}
+                    onChange={(e) => {
+                      if (e.target.value === "__custom__") {
+                        setEditCustomFeed(true);
+                        return;
+                      }
+                      applyFeedProduct(e.target.value, "edit");
+                    }}
+                  >
+                    <option value="">Pick from inventory…</option>
+                    {feedProducts.map((product) => <option key={product.key} value={product.key}>{product.label}</option>)}
+                    <option value="__custom__">Custom feed</option>
+                  </select>
+                </div>
+                {editCustomFeed && (
+                  <>
+                    <div>
+                      <label className="block text-xs text-pond-300 mb-1.5 font-medium">Brand</label>
+                      <input className="field" value={editForm.feedBrand} onChange={(e) => updateEdit("feedBrand", e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-pond-300 mb-1.5 font-medium">Pellet Size (mm)</label>
+                      <input className="field" type="number" min={0.1} step="0.1" value={editForm.feedSizeMm} onChange={(e) => updateEdit("feedSizeMm", e.target.value)} />
+                    </div>
+                  </>
+                )}
+                <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Deaths</label>
                   <input className="field" type="number" min={0} value={editForm.mortality} onChange={(e) => updateEdit("mortality", e.target.value)} />
                 </div>
-                <div>
+                <div className="lg:col-span-2">
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Mortality cause</label>
                   <select className="field" value={editForm.mortalityCause} onChange={(e) => updateEdit("mortalityCause", e.target.value)}>
                     {CAUSES.map((c) => <option key={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
+              {!editCustomFeed && selectedEditFeedKey ? (
+                <p className="text-xs text-pond-200/65">
+                  Using inventory product <span className="text-pond-100 font-medium">{editForm.feedType}</span>.
+                </p>
+              ) : null}
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>

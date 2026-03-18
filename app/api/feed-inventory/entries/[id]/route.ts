@@ -4,16 +4,21 @@ import { Types } from "mongoose";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { FeedInventory } from "@/models/FeedInventory";
+import { getFeedIdentity } from "@/lib/feed-inventory";
 
 function validateBody(body: any) {
   const date = body?.date ? new Date(body.date) : new Date();
   if (Number.isNaN(date.getTime())) return { ok: false as const, error: "Invalid purchase date" };
 
-  const brand = String(body?.brand || "").trim();
+  const identity = getFeedIdentity({
+    brand: String(body?.brand || "").trim(),
+    pelletSizeMm: body?.pelletSizeMm,
+    feedType: String(body?.brand || "").trim(),
+  });
   const bagSizeKg = Number(body?.bagSizeKg || 0);
   const bags = Number(body?.bags || 0);
   const unitPrice = Number(body?.unitPrice || 0);
-  if (!brand) return { ok: false as const, error: "Feed brand/type is required" };
+  if (!identity.brand) return { ok: false as const, error: "Feed brand/type is required" };
   if (!Number.isFinite(bagSizeKg) || bagSizeKg <= 0) return { ok: false as const, error: "Bag size must be greater than 0" };
   if (!Number.isFinite(bags) || bags <= 0) return { ok: false as const, error: "Bags must be greater than 0" };
   if (!Number.isFinite(unitPrice) || unitPrice < 0) return { ok: false as const, error: "Unit price cannot be negative" };
@@ -22,7 +27,8 @@ function validateBody(body: any) {
     ok: true as const,
     value: {
       date,
-      brand,
+      brand: identity.brand,
+      pelletSizeMm: identity.pelletSizeMm,
       bagSizeKg,
       bags,
       totalKg: bagSizeKg * bags,
@@ -73,4 +79,3 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   await inv.save();
   return NextResponse.json(inv);
 }
-
