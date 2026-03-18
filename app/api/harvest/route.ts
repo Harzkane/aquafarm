@@ -4,8 +4,10 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Financial } from "@/models/Financial";
 import { Batch } from "@/models/Batch";
+import { Tank } from "@/models/Tank";
 import { runAtomic } from "@/lib/transactions";
 import { validateHarvestPayload } from "@/lib/validators/harvest";
+import { normalizeTankAllocations, syncTankOccupancy } from "@/lib/tank-allocations";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -106,10 +108,28 @@ export async function POST(req: NextRequest) {
     await fin.save({ session: txSession || undefined });
 
     if (payload.markBatchHarvested) {
+      const allocations = normalizeTankAllocations(batch.tankAllocations);
+      const tankIds = allocations.map((item) => item.tankId).filter(Boolean);
+      if (tankIds.length > 0) {
+        const tanks = await Tank.find({ userId, _id: { $in: tankIds } }).session(txSession || null);
+        await Promise.all(
+          tanks.map(async (tank) => {
+            const allocated = allocations
+              .filter((item) => item.tankId === String(tank._id))
+              .reduce((sum, item) => sum + Number(item.fishCount || 0), 0);
+            tank.currentFish = Math.max(0, Number(tank.currentFish || 0) - allocated);
+            syncTankOccupancy(tank, String(batch._id));
+            await tank.save({ session: txSession || undefined });
+          }),
+        );
+      }
+
       batch.status = "harvested";
       batch.harvestDate = payload.date ? new Date(payload.date) : new Date();
       batch.harvestedWeightKg = payload.weightKg;
       batch.harvestPricePerKg = payload.pricePerKg;
+      batch.currentCount = 0;
+      batch.tankAllocations = [];
       await batch.save({ session: txSession || undefined });
     }
 

@@ -125,9 +125,36 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       return NextResponse.json({ error: "Current fish cannot exceed fish capacity" }, { status: 400 });
     }
 
+    if (
+      validated.value.currentFish !== undefined &&
+      validated.value.currentFish !== Number(tank.currentFish || 0)
+    ) {
+      const linkedBatch = await Batch.findOne({
+        userId,
+        status: { $in: ["active", "partial"] },
+        $and: [
+          { $or: [{ "tankAllocations.tankId": id }, { "tankAllocations.tankName": tank.name }] },
+          { $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }] },
+        ],
+      }).select("_id name");
+
+      if (linkedBatch) {
+        return NextResponse.json(
+          {
+            error: `Tank fish count is managed by batch allocation for ${linkedBatch.name}. Use Allocate Batch Fish, Move Fish, mortality, or harvest flows instead.`,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     Object.assign(tank, validated.value);
     if (validated.value.capacity !== undefined) {
       tank.workingVolume = Math.round(validated.value.capacity * 0.78);
+    }
+    if (validated.value.currentFish !== undefined && validated.value.currentFish <= 0 && tank.currentBatch) {
+      tank.currentBatch = undefined;
+      if (tank.status === "active") tank.status = "empty";
     }
 
     await tank.save();

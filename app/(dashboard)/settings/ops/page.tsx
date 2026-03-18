@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import { ActivitySquare, AlertTriangle, Loader2, RefreshCw, Search } from "lucide-react";
 import { formatDateTimeNg } from "@/lib/dates";
 
@@ -24,6 +24,20 @@ type CronSummary = {
   avgDurationMs: number;
 };
 
+type OpsTotals = {
+  totalRuns: number;
+  failedRuns: number;
+  dryRuns: number;
+  avgDurationMs: number;
+};
+
+type OpsPagination = {
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  totalRuns: number;
+};
+
 export default function OpsMonitorPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -32,19 +46,41 @@ export default function OpsMonitorPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "success" | "failed">("all");
   const [runs, setRuns] = useState<CronRun[]>([]);
   const [summary, setSummary] = useState<CronSummary[]>([]);
+  const [totals, setTotals] = useState<OpsTotals>({ totalRuns: 0, failedRuns: 0, dryRuns: 0, avgDurationMs: 0 });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRuns, setTotalRuns] = useState(0);
+  const deferredQuery = useDeferredValue(query);
 
-  async function load() {
+  async function load(options?: { showRefreshing?: boolean }) {
+    if (options?.showRefreshing) setRefreshing(true);
     setError("");
     try {
-      const res = await fetch("/api/ops/cron-runs?limit=120", { cache: "no-store" });
+      const params = new URLSearchParams();
+      if (deferredQuery.trim()) params.set("query", deferredQuery.trim());
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      params.set("page", String(page));
+      params.set("pageSize", String(pageSize));
+
+      const res = await fetch(`/api/ops/cron-runs?${params.toString()}`, { cache: "no-store" });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload?.error || "Failed to load ops telemetry");
       setRuns(Array.isArray(payload?.runs) ? payload.runs : []);
       setSummary(Array.isArray(payload?.summary) ? payload.summary : []);
+      setTotals({
+        totalRuns: Number(payload?.totals?.totalRuns || 0),
+        failedRuns: Number(payload?.totals?.failedRuns || 0),
+        dryRuns: Number(payload?.totals?.dryRuns || 0),
+        avgDurationMs: Number(payload?.totals?.avgDurationMs || 0),
+      });
+      const pagination: OpsPagination | null = payload?.pagination || null;
+      setTotalPages(Math.max(1, Number(pagination?.totalPages || 1)));
+      setTotalRuns(Number(pagination?.totalRuns || 0));
     } catch (err: any) {
       setError(err?.message || "Failed to load ops telemetry");
+    } finally {
+      if (options?.showRefreshing) setRefreshing(false);
     }
   }
 
@@ -54,44 +90,22 @@ export default function OpsMonitorPage() {
       await load();
       setLoading(false);
     })();
-  }, []);
-
-  const filteredRuns = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return runs.filter((run) => {
-      if (statusFilter !== "all" && run.status !== statusFilter) return false;
-      if (!q) return true;
-      const text = `${run.job} ${run.status} ${run.error || ""}`.toLowerCase();
-      return text.includes(q);
-    });
-  }, [runs, query, statusFilter]);
+  }, [deferredQuery, page, pageSize, statusFilter]);
 
   useEffect(() => {
     setPage(1);
-  }, [query, statusFilter]);
+  }, [deferredQuery, statusFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredRuns.length / pageSize));
-  const paginatedRuns = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filteredRuns.slice(start, start + pageSize);
-  }, [filteredRuns, page, pageSize]);
+  useEffect(() => {
+    setPage(1);
+  }, [pageSize]);
 
   useEffect(() => {
     setPage((current) => Math.min(current, totalPages));
   }, [totalPages]);
 
-  const totals = useMemo(() => {
-    const total = runs.length;
-    const failed = runs.filter((run) => run.status === "failed").length;
-    const dryRun = runs.filter((run) => run.dryRun).length;
-    const avgDurationMs = total > 0 ? Math.round(runs.reduce((sum, run) => sum + Number(run.durationMs || 0), 0) / total) : 0;
-    return { total, failed, dryRun, avgDurationMs };
-  }, [runs]);
-
   async function refresh() {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
+    await load({ showRefreshing: true });
   }
 
   if (loading) {
@@ -121,18 +135,18 @@ export default function OpsMonitorPage() {
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="stat-card">
-          <p className="text-xs uppercase tracking-wider text-pond-200/70">Runs loaded</p>
-          <p className="mt-2 text-2xl font-semibold text-pond-100">{totals.total}</p>
+          <p className="text-xs uppercase tracking-wider text-pond-200/70">Runs matched</p>
+          <p className="mt-2 text-2xl font-semibold text-pond-100">{totals.totalRuns}</p>
         </div>
         <div className="stat-card">
           <p className="text-xs uppercase tracking-wider text-pond-200/70">Failures</p>
-          <p className={`mt-2 text-2xl font-semibold ${totals.failed > 0 ? "text-red-300" : "text-emerald-300"}`}>
-            {totals.failed}
+          <p className={`mt-2 text-2xl font-semibold ${totals.failedRuns > 0 ? "text-red-300" : "text-emerald-300"}`}>
+            {totals.failedRuns}
           </p>
         </div>
         <div className="stat-card">
           <p className="text-xs uppercase tracking-wider text-pond-200/70">Dry runs</p>
-          <p className="mt-2 text-2xl font-semibold text-pond-100">{totals.dryRun}</p>
+          <p className="mt-2 text-2xl font-semibold text-pond-100">{totals.dryRuns}</p>
         </div>
         <div className="stat-card">
           <p className="text-xs uppercase tracking-wider text-pond-200/70">Avg duration</p>
@@ -191,14 +205,14 @@ export default function OpsMonitorPage() {
       <section className="glass-card overflow-hidden">
         <div className="border-b border-pond-700/20 px-5 py-4 flex items-center justify-between">
           <h2 className="section-title">Recent Runs</h2>
-          <span className="text-xs text-pond-200/65">{filteredRuns.length} entries</span>
+          <span className="text-xs text-pond-200/65">{totalRuns} entries</span>
         </div>
-        {filteredRuns.length === 0 ? (
+        {totalRuns === 0 ? (
           <div className="p-10 text-center text-sm text-pond-200/70">No runs for current filters.</div>
         ) : (
           <>
             <div className="divide-y divide-pond-700/20">
-            {paginatedRuns.map((run, idx) => (
+            {runs.map((run, idx) => (
               <div key={`${run.job}-${run.createdAt}-${idx}`} className="px-5 py-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -228,7 +242,7 @@ export default function OpsMonitorPage() {
             </div>
             <div className="px-5 py-3 border-t border-pond-700/20 flex items-center justify-between gap-3 flex-wrap">
               <p className="text-xs text-pond-200/65">
-                Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, filteredRuns.length)} of {filteredRuns.length}
+                Showing {totalRuns === 0 ? 0 : (page - 1) * pageSize + 1}-{Math.min(page * pageSize, totalRuns)} of {totalRuns}
               </p>
               <div className="flex items-center gap-2">
                 <select

@@ -7,6 +7,11 @@ import { Batch } from "@/models/Batch";
 import { Tank } from "@/models/Tank";
 import { runAtomic } from "@/lib/transactions";
 import { recordAuditEvent } from "@/lib/audit";
+import {
+  getAllocatedFishCount,
+  syncTankOccupancy,
+  upsertTankAllocation,
+} from "@/lib/tank-allocations";
 
 function toPositiveInt(value: unknown) {
   const n = Math.trunc(Number(value));
@@ -55,8 +60,20 @@ export async function POST(req: NextRequest) {
     if (!batch) return { error: "Active batch not found", status: 404 as const };
     if (!tank) return { error: "Tank not found", status: 404 as const };
 
-    const allocations = Array.isArray(batch.tankAllocations) ? [...batch.tankAllocations] : [];
-    const allocatedFish = allocations.reduce((sum: number, item: any) => sum + Number(item?.fishCount || 0), 0);
+    const conflictingBatch = await Batch.findOne({
+      _id: { $ne: batch._id },
+      userId,
+      status: { $in: ["active", "partial"] },
+      $and: [
+        { "tankAllocations.tankId": String(tank._id) },
+        { $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }] },
+      ],
+    })
+      .select("name")
+      .session(txSession || null);
+
+    const allocations = batch.tankAllocations;
+    const allocatedFish = getAllocatedFishCount(allocations);
     const unassignedFish = Math.max(0, Number(batch.currentCount || 0) - allocatedFish);
     if (count > unassignedFish) {
       return { error: `Only ${unassignedFish.toLocaleString()} unassigned fish remain for ${batch.name}.`, status: 409 as const };
@@ -64,6 +81,18 @@ export async function POST(req: NextRequest) {
 
     const currentFish = Number(tank.currentFish || 0);
     const targetFishCapacity = Number(tank.targetFishCapacity || 0);
+    if (conflictingBatch) {
+      return {
+        error: `${tank.name} is already allocated to active batch ${conflictingBatch.name}. Move or clear those fish first.`,
+        status: 409 as const,
+      };
+    }
+    if (currentFish > 0 && tank.currentBatch && String(tank.currentBatch) !== String(batch._id)) {
+      return {
+        error: `${tank.name} already contains fish from another batch. Move or clear those fish first.`,
+        status: 409 as const,
+      };
+    }
     if (targetFishCapacity > 0 && currentFish + count > targetFishCapacity) {
       return {
         error: `${tank.name} fish capacity is ${targetFishCapacity}. Reduce allocation count or update fish capacity.`,
@@ -72,23 +101,14 @@ export async function POST(req: NextRequest) {
     }
 
     tank.currentFish = currentFish + count;
-    if (tank.currentFish > 0 && tank.status === "empty") tank.status = "active";
-    if (!tank.currentBatch) tank.currentBatch = batch._id;
-
-    const existingAllocation = allocations.find((item: any) => item?.tankId === String(tank._id));
-    if (existingAllocation) {
-      existingAllocation.fishCount = Number(existingAllocation.fishCount || 0) + count;
-      existingAllocation.tankName = tank.name;
-      existingAllocation.phase = existingAllocation.phase || "stocked";
-    } else {
-      allocations.push({
-        tankId: String(tank._id),
-        tankName: tank.name,
-        fishCount: count,
-        phase: "stocked",
-      });
-    }
-    batch.tankAllocations = allocations;
+    syncTankOccupancy(tank, String(batch._id));
+    batch.tankAllocations = upsertTankAllocation(
+      allocations,
+      String(tank._id),
+      tank.name,
+      count,
+      "stocked",
+    );
 
     await Promise.all([
       tank.save({ session: txSession || undefined }),

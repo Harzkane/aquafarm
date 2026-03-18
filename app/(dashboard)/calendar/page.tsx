@@ -191,7 +191,7 @@ export default function CalendarPage() {
     () => batches.filter((b) => b.status === "active" || b.status === "partial").length,
     [batches]
   );
-  const reminders = useMemo<ReminderItem[]>(() => {
+  const allReminders = useMemo<ReminderItem[]>(() => {
     const today = startOfDay(new Date());
     const list: ReminderItem[] = [];
 
@@ -225,12 +225,11 @@ export default function CalendarPage() {
       }
     }
 
-    return list
-      .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
-      .slice(0, 10);
+    return list.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
   }, [batches, eventsByKey]);
-  const dueSoonCount = reminders.filter((r) => r.status === "dueSoon").length;
-  const overdueCount = reminders.filter((r) => r.status === "overdue").length;
+  const reminders = useMemo(() => allReminders.slice(0, 10), [allReminders]);
+  const dueSoonCount = allReminders.filter((r) => r.status === "dueSoon").length;
+  const overdueCount = allReminders.filter((r) => r.status === "overdue").length;
 
   if (loading) {
     return (

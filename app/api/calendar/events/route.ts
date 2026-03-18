@@ -6,6 +6,9 @@ import { connectDB } from "@/lib/db";
 import { Batch } from "@/models/Batch";
 import { CalendarEvent } from "@/models/CalendarEvent";
 
+const SORT_WEEKS = new Set([3, 8, 14, 17]);
+const HARVEST_WEEK = 18;
+
 function normalizeText(v: unknown, maxLen: number) {
   if (typeof v !== "string") return "";
   return v.trim().slice(0, maxLen);
@@ -58,6 +61,12 @@ export async function POST(req: NextRequest) {
   if (!["sort", "harvest"].includes(kind)) return NextResponse.json({ error: "Invalid calendar event kind" }, { status: 400 });
   if (!Number.isFinite(milestoneWeek) || milestoneWeek <= 0) return NextResponse.json({ error: "Milestone week is invalid" }, { status: 400 });
   if (!completedAt) return NextResponse.json({ error: "Completed date is invalid" }, { status: 400 });
+  if (kind === "sort" && !SORT_WEEKS.has(milestoneWeek)) {
+    return NextResponse.json({ error: "Invalid sort milestone week" }, { status: 400 });
+  }
+  if (kind === "harvest" && milestoneWeek !== HARVEST_WEEK) {
+    return NextResponse.json({ error: "Invalid harvest milestone week" }, { status: 400 });
+  }
 
   await connectDB();
 
@@ -65,8 +74,20 @@ export async function POST(req: NextRequest) {
     _id: batchId,
     userId,
     $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
-  }).select("_id status");
+  }).select("_id status stockingDate");
   if (!batch) return NextResponse.json({ error: "Batch not found" }, { status: 404 });
+  if (kind === "sort" && !["active", "partial"].includes(String(batch.status || ""))) {
+    return NextResponse.json({ error: "Sort milestones can only be recorded for active batches" }, { status: 409 });
+  }
+  if (kind === "harvest" && String(batch.status || "") !== "harvested") {
+    return NextResponse.json({ error: "Harvest milestones are tracked from actual batch harvest status" }, { status: 409 });
+  }
+
+  const dueDate = new Date(batch.stockingDate);
+  dueDate.setDate(dueDate.getDate() + milestoneWeek * 7);
+  if (completedAt.getTime() < dueDate.getTime() - 365 * 24 * 60 * 60 * 1000) {
+    return NextResponse.json({ error: "Completed date is unrealistically early for this milestone" }, { status: 400 });
+  }
 
   const event = await CalendarEvent.findOneAndUpdate(
     { userId, batchId, kind, milestoneWeek },

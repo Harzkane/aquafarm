@@ -198,6 +198,7 @@ export default function TanksPage() {
   const [showAllocateModal, setShowAllocateModal] = useState(false);
   const [allocateForm, setAllocateForm] = useState<AllocateForm>(initialAllocateForm);
   const [allocateError, setAllocateError] = useState("");
+  const [editError, setEditError] = useState("");
   const [movementPage, setMovementPage] = useState(1);
   const [movementPageSize, setMovementPageSize] = useState(10);
 
@@ -257,6 +258,7 @@ export default function TanksPage() {
   function openEdit(tank: Tank) {
     setEditingTank(tank);
     setEditForm(toForm(tank));
+    setEditError("");
     setError("");
   }
 
@@ -352,6 +354,7 @@ export default function TanksPage() {
 
     setSaving(true);
     setError("");
+    setEditError("");
 
     try {
       const res = await fetch(`/api/tanks/${editingTank._id}`, {
@@ -371,8 +374,11 @@ export default function TanksPage() {
         prev.map((t) => (t._id === payload._id ? payload : t)),
       );
       setEditingTank(null);
+      setEditError("");
     } catch (err: any) {
-      setError(err?.message || "Failed to update tank");
+      const message = err?.message || "Failed to update tank";
+      setEditError(message);
+      setError(message);
     } finally {
       setSaving(false);
     }
@@ -1569,6 +1575,11 @@ export default function TanksPage() {
               </button>
             </div>
             <form onSubmit={saveEdit} className="space-y-4">
+              {editError && (
+                <div className="rounded-xl px-3 py-2 text-sm text-danger border border-red-400/30 bg-red-500/10">
+                  {editError}
+                </div>
+              )}
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">
                   Tank Name
@@ -1665,6 +1676,9 @@ export default function TanksPage() {
                       }))
                     }
                   />
+                  <p className="text-[11px] text-pond-200/65 mt-1">
+                    If this tank is linked to an active batch, update fish counts through Allocate Batch Fish, Move Fish, mortality, or harvest.
+                  </p>
                 </div>
               </div>
               <div>

@@ -10,6 +10,7 @@ import { Types } from "mongoose";
 import { recordAuditEvent } from "@/lib/audit";
 import { runAtomic } from "@/lib/transactions";
 import { validateLogPayload } from "@/lib/validators/logs";
+import { removeFishFromBatchAllocations } from "@/lib/tank-allocations";
 
 function dayRange(date: Date) {
   const start = new Date(date);
@@ -33,6 +34,14 @@ async function applyMortalityDelta(
   }).session(txSession || null);
   if (!batch) return;
   const updatedCount = Math.max(0, (batch.currentCount || 0) - deltaMortality);
+  if (deltaMortality > 0) {
+    await removeFishFromBatchAllocations({
+      batch,
+      userId,
+      count: deltaMortality,
+      txSession,
+    });
+  }
   batch.currentCount = updatedCount;
   await batch.save({ session: txSession || undefined });
 }

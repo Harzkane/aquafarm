@@ -8,6 +8,7 @@ import { Types } from "mongoose";
 import { recordAuditEvent } from "@/lib/audit";
 import { runAtomic } from "@/lib/transactions";
 import { formatFeedLabel, getFeedIdentity } from "@/lib/feed-inventory";
+import { removeFishFromBatchAllocations } from "@/lib/tank-allocations";
 
 type LogPatchBody = {
   batchId?: string;
@@ -140,6 +141,14 @@ async function applyMortalityDelta(
     $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
   }).session(txSession || null);
   if (!batch) return;
+  if (deltaMortality > 0) {
+    await removeFishFromBatchAllocations({
+      batch,
+      userId,
+      count: deltaMortality,
+      txSession,
+    });
+  }
   batch.currentCount = Math.max(0, (batch.currentCount || 0) - deltaMortality);
   await batch.save({ session: txSession || undefined });
 }

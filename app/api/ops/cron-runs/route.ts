@@ -25,10 +25,12 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url);
+  const query = String(searchParams.get("query") || "").trim();
   const job = String(searchParams.get("job") || "").trim();
   const status = String(searchParams.get("status") || "").trim();
-  const limit = clampInt(searchParams.get("limit"), 50, 1, 200);
+  const page = clampInt(searchParams.get("page"), 1, 1, 5000);
+  const pageSize = clampInt(searchParams.get("pageSize"), 10, 1, 50);
 
-  const result = await fetchCronRuns({ job, status, limit });
+  const result = await fetchCronRuns({ query, job, status, page, pageSize });
   return NextResponse.json(result);
 }
