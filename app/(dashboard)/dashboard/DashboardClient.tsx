@@ -1,4 +1,5 @@
 "use client";
+import { useMemo, useState } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { Fish, Droplets, TrendingUp, Package, AlertCircle, CheckCircle, Clock } from "lucide-react";
 import { formatNaira, calcSurvivalRate, weeksSince, getBatchPhase } from "@/lib/utils";
@@ -17,6 +18,16 @@ interface Props {
   totalFish: number; totalInitial: number; totalFeedToday: number;
   totalMortality30d: number; totalExpenses: number; totalRevenue: number;
   activeBatches: number; totalTanks: number; chartData: any[];
+  batchSummaries: Array<{
+    batchId: string;
+    totalFish: number;
+    totalInitial: number;
+    totalFeedToday: number;
+    totalMortality30d: number;
+    totalExpenses: number;
+    totalRevenue: number;
+    chartData: any[];
+  }>;
   actions: ActionItem[];
   batches: any[]; tanks: any[]; farmName: string; userName: string;
   plan: "free" | "pro" | "commercial";
@@ -41,13 +52,44 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function DashboardClient({
   totalFish, totalInitial, totalFeedToday, totalMortality30d,
   totalExpenses, totalRevenue, activeBatches, totalTanks,
-  chartData, actions, batches, tanks, farmName, userName, plan,
+  chartData, batchSummaries, actions, batches, tanks, farmName, userName, plan,
 }: Props) {
-  const survivalRate = calcSurvivalRate(totalFish, totalInitial);
-  const netProfit = totalRevenue - totalExpenses;
+  const [selectedBatchId, setSelectedBatchId] = useState("all");
   const isFree = plan === "free";
   const communitySupportHref = process.env.NEXT_PUBLIC_COMMUNITY_SUPPORT_URL || "";
   const prioritySupportHref = getPriorityWhatsAppHref(plan, userName);
+  const selectedBatchSummary = useMemo(
+    () => batchSummaries.find((summary) => summary.batchId === selectedBatchId) || null,
+    [batchSummaries, selectedBatchId],
+  );
+  const selectedBatch = useMemo(
+    () => batches.find((batch) => String(batch._id) === selectedBatchId) || null,
+    [batches, selectedBatchId],
+  );
+
+  const scope = selectedBatchSummary
+    ? {
+        totalFish: selectedBatchSummary.totalFish,
+        totalInitial: selectedBatchSummary.totalInitial,
+        totalFeedToday: selectedBatchSummary.totalFeedToday,
+        totalMortality30d: selectedBatchSummary.totalMortality30d,
+        totalExpenses: selectedBatchSummary.totalExpenses,
+        totalRevenue: selectedBatchSummary.totalRevenue,
+        chartData: selectedBatchSummary.chartData,
+      }
+    : {
+        totalFish,
+        totalInitial,
+        totalFeedToday,
+        totalMortality30d,
+        totalExpenses,
+        totalRevenue,
+        chartData,
+      };
+
+  const survivalRate = calcSurvivalRate(scope.totalFish, scope.totalInitial);
+  const netProfit = scope.totalRevenue - scope.totalExpenses;
+  const scopeLabel = selectedBatch ? selectedBatch.name : "All Farm";
 
   const visibleActions = (isFree
     ? actions.filter((a) => !FREE_LOCKED_ACTION_PREFIXES.some((prefix) => a.href.startsWith(prefix)))
@@ -57,8 +99,8 @@ export default function DashboardClient({
   const kpis = isFree ? [
     {
       label: "Fish Alive",
-      value: totalFish.toLocaleString(),
-      sub: `of ${totalInitial.toLocaleString()} stocked`,
+      value: scope.totalFish.toLocaleString(),
+      sub: `of ${scope.totalInitial.toLocaleString()} stocked`,
       icon: Fish,
       color: "#9ca3af",
       glow: "rgba(69,184,128,0.2)",
@@ -66,32 +108,32 @@ export default function DashboardClient({
     {
       label: "Survival Rate",
       value: `${survivalRate}%`,
-      sub: `${totalMortality30d} deaths (30 days)`,
+      sub: `${scope.totalMortality30d} deaths (30 days)`,
       icon: CheckCircle,
       color: Number(survivalRate) > 85 ? "#9ca3af" : Number(survivalRate) > 70 ? "#d3bf86" : "#f87171",
       glow: "rgba(69,184,128,0.15)",
     },
     {
       label: "Feed Today",
-      value: `${totalFeedToday}kg`,
-      sub: "across all tanks",
+      value: `${scope.totalFeedToday}kg`,
+      sub: selectedBatch ? `${selectedBatch.name} only` : "across all tanks",
       icon: Droplets,
       color: "#75d7ff",
       glow: "rgba(117,215,255,0.15)",
     },
     {
       label: "Mortality (30d)",
-      value: totalMortality30d.toLocaleString(),
+      value: scope.totalMortality30d.toLocaleString(),
       sub: "logged fish deaths",
       icon: AlertCircle,
-      color: totalMortality30d > 0 ? "#fbbf24" : "var(--success)",
+      color: scope.totalMortality30d > 0 ? "#fbbf24" : "var(--success)",
       glow: "rgba(245, 158, 11, 0.18)",
     },
   ] : [
     {
       label: "Fish Alive",
-      value: totalFish.toLocaleString(),
-      sub: `of ${totalInitial.toLocaleString()} stocked`,
+      value: scope.totalFish.toLocaleString(),
+      sub: `of ${scope.totalInitial.toLocaleString()} stocked`,
       icon: Fish,
       color: "#9ca3af",
       glow: "rgba(69,184,128,0.2)",
@@ -99,15 +141,15 @@ export default function DashboardClient({
     {
       label: "Survival Rate",
       value: `${survivalRate}%`,
-      sub: `${totalMortality30d} deaths (30 days)`,
+      sub: `${scope.totalMortality30d} deaths (30 days)`,
       icon: CheckCircle,
       color: Number(survivalRate) > 85 ? "#9ca3af" : Number(survivalRate) > 70 ? "#d3bf86" : "#f87171",
       glow: "rgba(69,184,128,0.15)",
     },
     {
       label: "Feed Today",
-      value: `${totalFeedToday}kg`,
-      sub: "across all tanks",
+      value: `${scope.totalFeedToday}kg`,
+      sub: selectedBatch ? `${selectedBatch.name} only` : "across all tanks",
       icon: Droplets,
       color: "#75d7ff",
       glow: "rgba(117,215,255,0.15)",
@@ -115,7 +157,13 @@ export default function DashboardClient({
     {
       label: "Net Profit",
       value: formatNaira(netProfit),
-      sub: netProfit >= 0 ? "Revenue ahead of costs" : "Still in investment phase",
+      sub: selectedBatch
+        ? netProfit >= 0
+          ? `${selectedBatch.name} is profitable`
+          : `${selectedBatch.name} is still in investment phase`
+        : netProfit >= 0
+          ? "Revenue ahead of costs"
+          : "Still in investment phase",
       icon: TrendingUp,
       color: netProfit >= 0 ? "var(--success)" : "var(--danger)",
       glow: "rgba(69,184,128,0.15)",
@@ -180,6 +228,26 @@ export default function DashboardClient({
       )}
 
       {/* KPI Grid */}
+      <div className="glass-card p-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="section-title !text-base">Dashboard Scope</h2>
+          <p className="text-xs text-pond-200/65 mt-1">
+            Cards and charts are showing <span className="text-pond-100 font-medium">{scopeLabel}</span>.
+          </p>
+        </div>
+        <div className="w-full sm:w-72">
+          <label className="block text-xs text-pond-300 mb-1.5 font-medium">View Batch</label>
+          <select className="field" value={selectedBatchId} onChange={(e) => setSelectedBatchId(e.target.value)}>
+            <option value="all">All Farm</option>
+            {batches.map((batch: any) => (
+              <option key={batch._id} value={String(batch._id)}>
+                {batch.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
         {kpis.map(({ label, value, sub, icon: Icon, color, glow }) => (
           <div key={label} className="stat-card" style={{ boxShadow: `0 4px 24px ${glow}` }}>
@@ -202,7 +270,7 @@ export default function DashboardClient({
         <div className="chart-wrap">
           <h2 className="section-title mb-4">Feed Given (kg) — Last 14 Days</h2>
           <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={chartData}>
+            <AreaChart data={scope.chartData}>
               <defs>
                 <linearGradient id="feedGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%"  stopColor="#4b5563" stopOpacity={0.4} />
@@ -222,7 +290,7 @@ export default function DashboardClient({
         <div className="chart-wrap">
           <h2 className="section-title mb-4">Daily Mortality — Last 14 Days</h2>
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={chartData}>
+            <BarChart data={scope.chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184,0.1)" />
               <XAxis dataKey="date" tick={{ fill: "rgba(232,245,238,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: "rgba(232,245,238,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} />

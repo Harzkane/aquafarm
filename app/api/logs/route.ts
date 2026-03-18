@@ -91,10 +91,14 @@ export async function POST(req: NextRequest) {
     $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
   });
   if (!batch) return NextResponse.json({ error: "Batch not found" }, { status: 404 });
+  if (String(batch.status || "") === "harvested") {
+    return NextResponse.json({ error: "Daily logs cannot be recorded for a harvested batch" }, { status: 409 });
+  }
 
   const logDate = new Date(payload.date || new Date().toISOString());
   const { start, end } = dayRange(logDate);
   const feedSession = payload.feedSession || "morning";
+  const normalizedTankName = String(payload.tankName || "").trim();
   const slotMatcher =
     feedSession === "morning"
       ? [{ feedSession: "morning" }, { feedSession: { $exists: false } }, { feedSession: null }]
@@ -104,6 +108,7 @@ export async function POST(req: NextRequest) {
       userId,
       batchId: payload.batchId,
       date: { $gte: start, $lte: end },
+      tankName: normalizedTankName,
       $or: slotMatcher,
     }).session(txSession || null);
 
@@ -113,14 +118,14 @@ export async function POST(req: NextRequest) {
       const previousMortality = Number(existing.mortality || 0);
       const nextMortality = Number(payload.mortality || 0);
       const deltaMortality = nextMortality - previousMortality;
-      Object.assign(existing, payload);
+      Object.assign(existing, { ...payload, tankName: normalizedTankName });
       existing.date = logDate;
       await existing.save({ session: txSession || undefined });
       await applyMortalityDelta(payload.batchId, userId, deltaMortality, txSession);
       logDoc = existing;
       action = "update";
     } else {
-      const created = await DailyLog.create([{ ...payload, userId, date: logDate }], {
+      const created = await DailyLog.create([{ ...payload, tankName: normalizedTankName, userId, date: logDate }], {
         session: txSession || undefined,
       });
       logDoc = created[0];
@@ -140,6 +145,7 @@ export async function POST(req: NextRequest) {
         batchId: batch._id.toString(),
         batchName: batch.name,
         feedSession: payload.feedSession || "morning",
+        tankName: normalizedTankName,
         feedGiven: Number(payload.feedGiven || 0),
         feedBrand: payload.feedBrand || "",
         feedSizeMm: payload.feedSizeMm ?? null,

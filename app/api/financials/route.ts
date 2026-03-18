@@ -72,6 +72,9 @@ export async function POST(req: NextRequest) {
     if (!Number.isFinite(weightKg) || weightKg < 0) return { ok: false as const, error: "Weight cannot be negative" };
     if (!Number.isFinite(pricePerKg) || pricePerKg < 0) return { ok: false as const, error: "Price per kg cannot be negative" };
     if (!Number.isFinite(totalAmount) || totalAmount < 0) return { ok: false as const, error: "Total amount cannot be negative" };
+    if (weightKg <= 0) return { ok: false as const, error: "Weight sold must be greater than 0" };
+    if (pricePerKg <= 0) return { ok: false as const, error: "Price per kg must be greater than 0" };
+    if (totalAmount <= 0) return { ok: false as const, error: "Total amount must be greater than 0" };
     if (!date) return { ok: false as const, error: "Invalid revenue date" };
     return {
       ok: true as const,

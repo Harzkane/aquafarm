@@ -52,6 +52,16 @@ export type FeedProductSummary = {
   lowStockSeverity: "warning" | "critical" | null;
 };
 
+export type FeedProductBalance = {
+  key: string;
+  brand: string;
+  pelletSizeMm: number | null;
+  label: string;
+  stockedKg: number;
+  consumedKg: number;
+  remainingKg: number;
+};
+
 function toFiniteNumber(value: MaybeNumber) {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
@@ -141,6 +151,62 @@ function ensureProduct(products: Map<string, MutableProduct>, identity: FeedIden
   };
   products.set(key, created);
   return created;
+}
+
+export function getFeedProductBalances(inventory: FeedInventoryLike | null | undefined, logs: FeedLogLike[]) {
+  const productMap = new Map<string, FeedProductBalance>();
+
+  const ensureBalance = (identity: FeedIdentity) => {
+    const key = getFeedKey(identity.brand, identity.pelletSizeMm);
+    const existing = productMap.get(key);
+    if (existing) return existing;
+
+    const created: FeedProductBalance = {
+      key,
+      brand: identity.brand,
+      pelletSizeMm: identity.pelletSizeMm,
+      label: formatFeedLabel(identity.brand, identity.pelletSizeMm),
+      stockedKg: 0,
+      consumedKg: 0,
+      remainingKg: 0,
+    };
+    productMap.set(key, created);
+    return created;
+  };
+
+  const openingStockKg = toFiniteNumber(inventory?.openingStockKg);
+  if (openingStockKg > 0) {
+    const openingIdentity = getFeedIdentity({
+      brand: inventory?.openingStockBrand,
+      pelletSizeMm: inventory?.openingStockSizeMm,
+    });
+    ensureBalance(openingIdentity).stockedKg += openingStockKg;
+  }
+
+  for (const purchase of inventory?.purchases || []) {
+    const identity = getFeedIdentity({
+      brand: purchase.brand,
+      pelletSizeMm: purchase.pelletSizeMm,
+      feedType: purchase.brand,
+    });
+    ensureBalance(identity).stockedKg += toFiniteNumber(purchase.totalKg);
+  }
+
+  for (const log of logs || []) {
+    const feedGiven = toFiniteNumber(log.feedGiven);
+    if (feedGiven <= 0) continue;
+    const identity = getFeedIdentity({
+      brand: log.feedBrand,
+      pelletSizeMm: log.feedSizeMm,
+      feedType: log.feedType,
+    });
+    ensureBalance(identity).consumedKg += feedGiven;
+  }
+
+  return Array.from(productMap.values()).map((product) => ({
+    ...product,
+    remainingKg: product.stockedKg - product.consumedKg,
+  }));
 }
 
 export function summarizeFeedInventory(inventory: FeedInventoryLike | null | undefined, logs: FeedLogLike[]) {

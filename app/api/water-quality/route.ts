@@ -139,9 +139,13 @@ export async function POST(req: NextRequest) {
     $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
   });
   if (!batch) return NextResponse.json({ error: "Batch not found" }, { status: 404 });
+  if (String(batch.status || "") === "harvested") {
+    return NextResponse.json({ error: "Water quality cannot be recorded for a harvested batch" }, { status: 409 });
+  }
 
   const date = new Date(payload.date || new Date().toISOString());
   const { start, end } = dayRange(date);
+  const normalizedTankName = String(payload.tankName || "").trim();
   const slotMatcher =
     payload.feedSession === "evening"
       ? [{ feedSession: "evening" }]
@@ -151,6 +155,7 @@ export async function POST(req: NextRequest) {
     userId,
     batchId: payload.batchId,
     date: { $gte: start, $lte: end },
+    tankName: normalizedTankName,
     $or: slotMatcher,
   });
 
@@ -158,7 +163,7 @@ export async function POST(req: NextRequest) {
   let auditAction: "create" | "update" = "create";
   if (existing) {
     existing.feedSession = payload.feedSession;
-    existing.tankName = payload.tankName || existing.tankName || "";
+    existing.tankName = normalizedTankName;
     existing.ph = payload.ph ?? null;
     existing.ammonia = payload.ammonia ?? null;
     existing.temperature = payload.temperature ?? null;
@@ -176,7 +181,7 @@ export async function POST(req: NextRequest) {
       batchId: payload.batchId,
       date,
       feedSession: payload.feedSession,
-      tankName: payload.tankName || "",
+      tankName: normalizedTankName,
       ph: payload.ph,
       ammonia: payload.ammonia,
       temperature: payload.temperature,
@@ -199,7 +204,7 @@ export async function POST(req: NextRequest) {
       batchId: batch._id.toString(),
       batchName: batch.name,
       feedSession: payload.feedSession || "morning",
-      tankName: payload.tankName || "",
+      tankName: normalizedTankName,
       ph: payload.ph ?? null,
       ammonia: payload.ammonia ?? null,
       temperature: payload.temperature ?? null,

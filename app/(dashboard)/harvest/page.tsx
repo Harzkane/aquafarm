@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, ShoppingBasket, Search, CalendarDays } from "lucide-react";
+import { CalendarDays, Loader2, Pencil, Plus, Search, ShoppingBasket, Trash2, X } from "lucide-react";
 import { formatNaira } from "@/lib/utils";
 
 type Batch = { _id: string; name: string; status?: string };
@@ -17,29 +17,58 @@ type HarvestRow = {
   date: string;
   avgPricePerFish: number;
 };
+type HarvestFormState = {
+  batchId: string;
+  date: string;
+  fishSold: string;
+  weightKg: string;
+  pricePerKg: string;
+  buyer: string;
+  channel: string;
+  markBatchHarvested: boolean;
+};
 
-export default function HarvestPage() {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [rows, setRows] = useState<HarvestRow[]>([]);
-  const [batches, setBatches] = useState<Batch[]>([]);
+function toDateInputValue(value?: string) {
+  if (!value) return new Date().toISOString().split("T")[0];
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return new Date().toISOString().split("T")[0];
+  return parsed.toISOString().split("T")[0];
+}
 
-  const [batchFilter, setBatchFilter] = useState("all");
-  const [search, setSearch] = useState("");
-  const [salesPage, setSalesPage] = useState(1);
-  const [salesPageSize, setSalesPageSize] = useState(10);
-
-  const [form, setForm] = useState({
-    batchId: "",
+function createDefaultForm(batchId = ""): HarvestFormState {
+  return {
+    batchId,
     date: new Date().toISOString().split("T")[0],
     fishSold: "",
     weightKg: "",
     pricePerKg: "2800",
     buyer: "",
     channel: "POK",
-    markBatchHarvested: true,
-  });
+    markBatchHarvested: false,
+  };
+}
+
+export default function HarvestPage() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [rows, setRows] = useState<HarvestRow[]>([]);
+  const [allBatches, setAllBatches] = useState<Batch[]>([]);
+  const [activeBatches, setActiveBatches] = useState<Batch[]>([]);
+  const [editRow, setEditRow] = useState<HarvestRow | null>(null);
+  const [editForm, setEditForm] = useState<HarvestFormState | null>(null);
+  const [editError, setEditError] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<HarvestRow | null>(null);
+  const [deletingId, setDeletingId] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+
+  const [batchFilter, setBatchFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [salesPage, setSalesPage] = useState(1);
+  const [salesPageSize, setSalesPageSize] = useState(10);
+
+  const [form, setForm] = useState<HarvestFormState>(createDefaultForm());
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -49,9 +78,11 @@ export default function HarvestPage() {
       const payload = await res.json();
       if (!res.ok) throw new Error(payload?.error || "Failed to load harvest records");
       setRows(Array.isArray(payload?.rows) ? payload.rows : []);
-      const activeBatches = (Array.isArray(payload?.batches) ? payload.batches : []).filter((b: Batch) => b?.status !== "harvested");
-      setBatches(activeBatches);
-      if (!form.batchId && activeBatches[0]?._id) setForm((f) => ({ ...f, batchId: activeBatches[0]._id }));
+      const loadedBatches = Array.isArray(payload?.batches) ? payload.batches : [];
+      const availableBatches = loadedBatches.filter((b: Batch) => b?.status !== "harvested");
+      setAllBatches(loadedBatches);
+      setActiveBatches(availableBatches);
+      if (!form.batchId && availableBatches[0]?._id) setForm((f) => ({ ...f, batchId: availableBatches[0]._id }));
     } catch (err: any) {
       setError(err?.message || "Unable to load harvest data");
     } finally {
@@ -118,6 +149,25 @@ export default function HarvestPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  function updateEdit<K extends keyof HarvestFormState>(key: K, value: HarvestFormState[K]) {
+    setEditForm((prev) => (prev ? { ...prev, [key]: value } : prev));
+  }
+
+  function startEdit(row: HarvestRow) {
+    setEditRow(row);
+    setEditError("");
+    setEditForm({
+      batchId: row.batchId,
+      date: toDateInputValue(row.date),
+      fishSold: row.fishSold ? String(row.fishSold) : "",
+      weightKg: String(row.weightKg || ""),
+      pricePerKg: String(row.pricePerKg || ""),
+      buyer: row.buyer || "",
+      channel: row.channel || "POK",
+      markBatchHarvested: false,
+    });
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -136,13 +186,68 @@ export default function HarvestPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to save harvest");
-      setForm((f) => ({ ...f, fishSold: "", weightKg: "", buyer: "" }));
+      setForm(createDefaultForm(form.batchId));
       await loadData();
     } catch (err: any) {
       setError(err?.message || "Failed to save harvest");
     } finally {
       setSaving(false);
     }
+  }
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editRow || !editForm) return;
+    setEditing(true);
+    setEditError("");
+    try {
+      const res = await fetch(`/api/financials/entries/${editRow._id}?type=revenue`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          batchId: editForm.batchId,
+          date: editForm.date,
+          fishSold: Number(editForm.fishSold || 0),
+          weightKg: Number(editForm.weightKg || 0),
+          pricePerKg: Number(editForm.pricePerKg || 0),
+          buyer: editForm.buyer,
+          channel: editForm.channel,
+          totalAmount: Number(editForm.weightKg || 0) * Number(editForm.pricePerKg || 0),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to update harvest sale");
+      setEditRow(null);
+      setEditForm(null);
+      await loadData();
+    } catch (err: any) {
+      setEditError(err?.message || "Failed to update harvest sale");
+    } finally {
+      setEditing(false);
+    }
+  }
+
+  async function deleteSale() {
+    if (!deleteTarget) return;
+    setDeletingId(deleteTarget._id);
+    setDeleteError("");
+    try {
+      const res = await fetch(`/api/financials/entries/${deleteTarget._id}?type=revenue`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to delete harvest sale");
+      setDeleteTarget(null);
+      await loadData();
+    } catch (err: any) {
+      setDeleteError(err?.message || "Failed to delete harvest sale");
+    } finally {
+      setDeletingId("");
+    }
+  }
+
+  function canDeleteSale(row: HarvestRow) {
+    return !(row.batchId && Number(row.fishSold || 0) > 0);
   }
 
   if (loading) {
@@ -191,7 +296,7 @@ export default function HarvestPage() {
               <label className="block text-xs text-pond-300 mb-1.5 font-medium">Batch *</label>
               <select className="field" required value={form.batchId} onChange={(e) => update("batchId", e.target.value)}>
                 <option value="">Select batch…</option>
-                {batches.map((b) => (
+                {activeBatches.map((b) => (
                   <option key={b._id} value={b._id}>
                     {b.name}
                   </option>
@@ -240,7 +345,7 @@ export default function HarvestPage() {
           </div>
           <label className="flex items-center gap-2 text-xs text-pond-300 cursor-pointer">
             <input type="checkbox" checked={form.markBatchHarvested} onChange={(e) => update("markBatchHarvested", e.target.checked)} />
-            Mark selected batch as harvested
+            Mark selected batch as fully harvested
           </label>
           <button type="submit" disabled={saving} className="btn-primary">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
@@ -306,7 +411,24 @@ export default function HarvestPage() {
                 <div key={row._id} className="p-4 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm text-pond-200 font-medium">{row.batchName}</p>
-                    <span className="badge badge-green">{formatNaira(row.totalAmount)}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="badge badge-green">{formatNaira(row.totalAmount)}</span>
+                      <button type="button" className="btn-secondary !px-2.5 !py-1.5 text-xs" onClick={() => startEdit(row)}>
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary !px-2.5 !py-1.5 text-xs text-danger disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => {
+                          setDeleteError("");
+                          setDeleteTarget(row);
+                        }}
+                        disabled={!canDeleteSale(row)}
+                        title={!canDeleteSale(row) ? "Stock-linked harvest sales cannot be deleted directly" : undefined}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                   <p className="text-xs text-pond-200/65">
                     {new Date(row.date).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}
@@ -332,6 +454,7 @@ export default function HarvestPage() {
                     <th>Revenue</th>
                     <th>Buyer</th>
                     <th>Channel</th>
+                    <th className="text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -347,6 +470,27 @@ export default function HarvestPage() {
                       <td className="font-mono text-success">{formatNaira(row.totalAmount)}</td>
                       <td className="text-xs">{row.buyer || "—"}</td>
                       <td className="text-xs capitalize">{row.channel || "—"}</td>
+                      <td>
+                        <div className="flex items-center justify-end gap-2">
+                          <button type="button" className="btn-secondary !px-2.5 !py-1.5 text-xs" onClick={() => startEdit(row)}>
+                            <Pencil className="w-3.5 h-3.5" />
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-secondary !px-2.5 !py-1.5 text-xs text-danger disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() => {
+                              setDeleteError("");
+                              setDeleteTarget(row);
+                            }}
+                            disabled={!canDeleteSale(row)}
+                            title={!canDeleteSale(row) ? "Stock-linked harvest sales cannot be deleted directly" : undefined}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Delete
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -390,6 +534,145 @@ export default function HarvestPage() {
           </>
         )}
       </div>
+
+      {editRow && editForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(12, 12, 14,0.85)", backdropFilter: "blur(8px)" }}>
+          <div className="glass-card w-full max-w-xl max-h-[85vh] overflow-y-auto p-6 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="font-display text-lg text-pond-100">Edit Harvest Sale</h2>
+                <p className="text-xs text-pond-200/70 mt-1">{editRow.batchName}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditRow(null);
+                  setEditForm(null);
+                  setEditError("");
+                }}
+                className="text-pond-200/75 hover:text-pond-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {editError && <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10">{editError}</div>}
+
+            <form onSubmit={saveEdit} className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-pond-300 mb-1.5 font-medium">Batch *</label>
+                  <select className="field" required value={editForm.batchId} disabled>
+                    <option value="">Select batch…</option>
+                    {allBatches.map((batch) => (
+                      <option key={batch._id} value={batch._id}>
+                        {batch.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-pond-200/60 mt-1">Batch is locked after stock has been reconciled.</p>
+                </div>
+                <div>
+                  <label className="block text-xs text-pond-300 mb-1.5 font-medium">Harvest Date</label>
+                  <div className="date-field-wrap">
+                    <span className="date-field-badge" />
+                    <CalendarDays className="date-field-icon h-5 w-5 text-pond-200/80" strokeWidth={2.25} />
+                    <input className="field" type="date" value={editForm.date} onChange={(e) => updateEdit("date", e.target.value)} />
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-pond-300 mb-1.5 font-medium">Fish Sold</label>
+                  <input className="field" type="number" min={0} placeholder="420" value={editForm.fishSold} disabled />
+                  <p className="text-xs text-pond-200/60 mt-1">Fish sold is locked once batch stock has been updated.</p>
+                </div>
+                <div>
+                  <label className="block text-xs text-pond-300 mb-1.5 font-medium">Weight (kg) *</label>
+                  <input className="field" type="number" min={0.1} step="0.1" required placeholder="850" value={editForm.weightKg} onChange={(e) => updateEdit("weightKg", e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-xs text-pond-300 mb-1.5 font-medium">Price/kg (₦) *</label>
+                  <input className="field" type="number" min={1} required placeholder="2200" value={editForm.pricePerKg} onChange={(e) => updateEdit("pricePerKg", e.target.value)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-pond-300 mb-1.5 font-medium">Buyer</label>
+                  <input className="field" placeholder="Kubwa Fish Market" value={editForm.buyer} onChange={(e) => updateEdit("buyer", e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-xs text-pond-300 mb-1.5 font-medium">Channel</label>
+                  <select className="field" value={editForm.channel} onChange={(e) => updateEdit("channel", e.target.value)}>
+                    <option value="POK">POK</option>
+                    <option value="restaurant">Restaurant</option>
+                    <option value="market">Market</option>
+                    <option value="direct">Direct</option>
+                    <option value="hotel">Hotel</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditRow(null);
+                    setEditForm(null);
+                    setEditError("");
+                  }}
+                  className="btn-secondary flex-1"
+                >
+                  Cancel
+                </button>
+                <button type="submit" disabled={editing} className="btn-primary flex-1">
+                  {editing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pencil className="w-4 h-4" />}
+                  {editing ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(12, 12, 14,0.85)", backdropFilter: "blur(8px)" }}>
+          <div className="glass-card w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="font-display text-lg text-pond-100">Delete Harvest Sale</h2>
+                <p className="text-xs text-pond-200/70 mt-1">{deleteTarget.batchName}</p>
+              </div>
+              <button type="button" onClick={() => { setDeleteTarget(null); setDeleteError(""); }} className="text-pond-200/75 hover:text-pond-300">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {deleteError && <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10">{deleteError}</div>}
+            <p className="text-sm text-pond-200/75">
+              Remove this sale record for {formatNaira(deleteTarget.totalAmount)}? This updates Financials and Reports, but it will not reopen the batch automatically.
+            </p>
+            {!canDeleteSale(deleteTarget) && (
+              <p className="text-xs text-pond-200/60">
+                Stock-linked harvest sales can no longer be deleted directly. Reopen the batch and record a corrected harvest instead.
+              </p>
+            )}
+            <div className="flex gap-3 pt-1">
+              <button type="button" onClick={() => { setDeleteTarget(null); setDeleteError(""); }} className="btn-secondary flex-1" disabled={deletingId === deleteTarget._id}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={deleteSale}
+                className="btn-primary flex-1 bg-red-700 hover:bg-red-600"
+                disabled={deletingId === deleteTarget._id || !canDeleteSale(deleteTarget)}
+              >
+                {deletingId === deleteTarget._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                {deletingId === deleteTarget._id ? "Deleting..." : "Delete Sale"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

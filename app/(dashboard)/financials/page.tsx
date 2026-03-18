@@ -56,8 +56,9 @@ export default function FinancialsPage() {
   const batchNameMap = useMemo(() => Object.fromEntries(batches.map((b) => [b._id, b.name])), [batches]);
 
   const [tab, setTab] = useState<"expense" | "revenue">("expense");
-  const [eForm, setEForm] = useState({ category: "feed", description: "", amount: "", batchId: "" });
-  const [rForm, setRForm] = useState({ fishSold: "", weightKg: "", pricePerKg: "2800", buyer: "", channel: "POK", batchId: "" });
+  const today = new Date().toISOString().split("T")[0];
+  const [eForm, setEForm] = useState({ category: "feed", description: "", amount: "", batchId: "", date: today });
+  const [rForm, setRForm] = useState({ fishSold: "", weightKg: "", pricePerKg: "2800", buyer: "", channel: "POK", batchId: "", date: today });
 
   const [typeFilter, setTypeFilter] = useState<"all" | "expense" | "revenue">("all");
   const [batchFilter, setBatchFilter] = useState<string>("all");
@@ -210,7 +211,7 @@ export default function FinancialsPage() {
       const payload = await res.json();
       if (!res.ok) throw new Error(payload?.error || "Failed to add expense");
       setData(payload);
-      setEForm((f) => ({ ...f, description: "", amount: "" }));
+      setEForm((f) => ({ ...f, description: "", amount: "", date: today }));
     } catch (err: any) {
       setError(err?.message || "Failed to add expense");
     } finally {
@@ -241,7 +242,7 @@ export default function FinancialsPage() {
       const payload = await res.json();
       if (!res.ok) throw new Error(payload?.error || "Failed to add revenue");
       setData(payload);
-      setRForm((f) => ({ ...f, fishSold: "", weightKg: "", buyer: "" }));
+      setRForm((f) => ({ ...f, fishSold: "", weightKg: "", buyer: "", date: today }));
     } catch (err: any) {
       setError(err?.message || "Failed to add revenue");
     } finally {
@@ -465,6 +466,14 @@ export default function FinancialsPage() {
                   {batches.map((b) => <option key={b._id} value={b._id}>{b.name}</option>)}
                 </select>
               </div>
+              <div>
+                <label className="block text-xs text-pond-300 mb-1.5 font-medium">Date</label>
+                <div className="date-field-wrap">
+                  <span className="date-field-badge" />
+                  <CalendarDays className="date-field-icon h-5 w-5 text-pond-200/80" strokeWidth={2.25} />
+                  <input className="field" type="date" value={eForm.date} onChange={(e) => setEForm((f) => ({ ...f, date: e.target.value }))} />
+                </div>
+              </div>
               <button type="submit" disabled={saving} className="btn-primary w-full" style={{ background: "linear-gradient(135deg,#7f1d1d,#dc2626)" }}>
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Add Expense
               </button>
@@ -503,6 +512,14 @@ export default function FinancialsPage() {
                   <option value="">All / General</option>
                   {batches.map((b) => <option key={b._id} value={b._id}>{b.name}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className="block text-xs text-pond-300 mb-1.5 font-medium">Date</label>
+                <div className="date-field-wrap">
+                  <span className="date-field-badge" />
+                  <CalendarDays className="date-field-icon h-5 w-5 text-pond-200/80" strokeWidth={2.25} />
+                  <input className="field" type="date" value={rForm.date} onChange={(e) => setRForm((f) => ({ ...f, date: e.target.value }))} />
+                </div>
               </div>
               <button type="submit" disabled={saving} className="btn-primary w-full">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Record Sale

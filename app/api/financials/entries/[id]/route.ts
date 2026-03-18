@@ -54,6 +54,9 @@ function validateRevenue(raw: any) {
   if (!Number.isFinite(weightKg) || weightKg < 0) return { ok: false as const, error: "Weight cannot be negative" };
   if (!Number.isFinite(pricePerKg) || pricePerKg < 0) return { ok: false as const, error: "Price per kg cannot be negative" };
   if (!Number.isFinite(totalAmount) || totalAmount < 0) return { ok: false as const, error: "Total amount cannot be negative" };
+  if (weightKg <= 0) return { ok: false as const, error: "Weight sold must be greater than 0" };
+  if (pricePerKg <= 0) return { ok: false as const, error: "Price per kg must be greater than 0" };
+  if (totalAmount <= 0) return { ok: false as const, error: "Total amount must be greater than 0" };
   if (!date) return { ok: false as const, error: "Invalid revenue date" };
   return {
     ok: true as const,
@@ -110,6 +113,26 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const coll = type === "expense" ? fin.expenses : fin.revenue;
   const entry = coll.id(params.id);
   if (!entry) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+
+  if (type === "revenue") {
+    const existingBatchId = entry.batchId ? String(entry.batchId) : "";
+    const existingFishSold = Number(entry.fishSold || 0);
+    const nextBatchId = validated.value.batchId ? String(validated.value.batchId) : "";
+    const nextFishSold = Number(validated.value.fishSold || 0);
+
+    if (existingBatchId && existingFishSold > 0) {
+      if (existingBatchId !== nextBatchId || existingFishSold !== nextFishSold) {
+        return NextResponse.json(
+          {
+            error:
+              "Batch-linked harvest sales cannot change batch or fish sold after stock has been reconciled. Reopen the batch and record a corrected harvest instead.",
+          },
+          { status: 409 },
+        );
+      }
+    }
+  }
+
   Object.assign(entry, validated.value);
 
   fin.updatedAt = new Date();
@@ -133,6 +156,21 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const coll = type === "expense" ? fin.expenses : fin.revenue;
   const entry = coll.id(params.id);
   if (!entry) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+
+  if (type === "revenue") {
+    const existingBatchId = entry.batchId ? String(entry.batchId) : "";
+    const existingFishSold = Number(entry.fishSold || 0);
+    if (existingBatchId && existingFishSold > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Batch-linked harvest sales cannot be deleted directly because they already affected fish stock. Reopen the batch and record a corrected harvest instead.",
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   entry.deleteOne();
 
   fin.updatedAt = new Date();

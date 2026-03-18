@@ -18,6 +18,9 @@ const FeedInventorySchema = new Schema({
   openingStockKg: { type: Number, default: 0 },
   openingStockBrand: { type: String, default: "" },
   openingStockSizeMm: { type: Number, default: null },
+  openingStockDate: { type: Date, default: null },
+  openingStockTotalCost: { type: Number, default: 0 },
+  openingStockSupplier: { type: String, default: "" },
   purchases: [FeedPurchaseSchema],
   updatedAt: { type: Date, default: Date.now },
 });

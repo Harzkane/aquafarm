@@ -44,6 +44,12 @@ type ConfirmAction = {
   batch: Batch;
 };
 
+type TankOption = {
+  _id: string;
+  name: string;
+  currentFish?: number;
+};
+
 const STATUS_FILTERS: Array<{ key: "all" | BatchStatus; label: string }> = [
   { key: "all", label: "All" },
   { key: "active", label: "Active" },
@@ -53,6 +59,7 @@ const STATUS_FILTERS: Array<{ key: "all" | BatchStatus; label: string }> = [
 
 export default function BatchesPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [tanks, setTanks] = useState<TankOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
@@ -66,6 +73,10 @@ export default function BatchesPage() {
   const [deletingBatchId, setDeletingBatchId] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [error, setError] = useState("");
+  const [createError, setCreateError] = useState("");
+  const [editError, setEditError] = useState("");
+  const [harvestError, setHarvestError] = useState("");
+  const [confirmError, setConfirmError] = useState("");
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [upgradeModalMessage, setUpgradeModalMessage] = useState(
     "You have reached your active batch limit for this plan. Upgrade your plan to create additional active batches."
@@ -75,6 +86,7 @@ export default function BatchesPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | BatchStatus>("all");
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "name" | "survival">("newest");
+  const [reopenForm, setReopenForm] = useState({ restoreCount: "", tankId: "" });
 
   const [form, setForm] = useState<BatchForm>({
     name: "Batch A",
@@ -101,15 +113,24 @@ export default function BatchesPage() {
     harvestNotes: "",
   });
 
+  async function loadBatches() {
+    const res = await fetch("/api/batches");
+    const payload = await res.json();
+    if (!res.ok) throw new Error(payload?.error || "Failed to load batches");
+    setBatches(payload);
+  }
+
   useEffect(() => {
-    Promise.all([fetch("/api/batches"), fetch("/api/billing/status")])
-      .then(async ([batchesRes, billingRes]) => {
+    Promise.all([fetch("/api/batches"), fetch("/api/billing/status"), fetch("/api/tanks")])
+      .then(async ([batchesRes, billingRes, tanksRes]) => {
         const batchesPayload = await batchesRes.json();
         const billingPayload = billingRes.ok ? await billingRes.json() : null;
+        const tanksPayload = tanksRes.ok ? await tanksRes.json() : [];
 
         if (!batchesRes.ok) throw new Error("Failed to load batches");
 
         setBatches(batchesPayload);
+        setTanks(Array.isArray(tanksPayload) ? tanksPayload : []);
         setPlanLabel(billingPayload?.planLabel || "Free");
         setActiveBatchLimit(
           typeof billingPayload?.limits?.maxActiveBatches === "number"
@@ -132,8 +153,8 @@ export default function BatchesPage() {
 
   function validateHarvestValues(values: HarvestForm) {
     if (!values.harvestDate) return "Harvest date is required";
-    if (!Number.isFinite(values.harvestedWeightKg) || values.harvestedWeightKg < 0) return "Harvested weight cannot be negative";
-    if (!Number.isFinite(values.harvestPricePerKg) || values.harvestPricePerKg < 0) return "Harvest price cannot be negative";
+    if (!Number.isFinite(values.harvestedWeightKg) || values.harvestedWeightKg <= 0) return "Harvested weight must be greater than 0";
+    if (!Number.isFinite(values.harvestPricePerKg) || values.harvestPricePerKg <= 0) return "Harvest price must be greater than 0";
     return "";
   }
 
@@ -165,10 +186,11 @@ export default function BatchesPage() {
     e.preventDefault();
     setCreating(true);
     setError("");
+    setCreateError("");
     const validationError = validateFormValues(form);
     if (validationError) {
       setCreating(false);
-      setError(validationError);
+      setCreateError(validationError);
       return;
     }
 
@@ -187,14 +209,16 @@ export default function BatchesPage() {
             payload?.error || "You have reached your active batch limit for this plan. Upgrade to add more."
           );
           setError("");
+          setCreateError("");
           return;
         }
         throw new Error(payload?.error || "Failed to create batch");
       }
       setBatches((prev) => [payload, ...prev]);
       setShowForm(false);
+      setCreateError("");
     } catch (err: any) {
-      setError(err?.message || "Failed to create batch");
+      setCreateError(err?.message || "Failed to create batch");
     } finally {
       setCreating(false);
     }
@@ -212,6 +236,7 @@ export default function BatchesPage() {
     });
     setShowEditForm(true);
     setError("");
+    setEditError("");
   }
 
   async function saveEdit(e: React.FormEvent) {
@@ -219,11 +244,11 @@ export default function BatchesPage() {
     if (!editingBatchId) return;
 
     setEditing(true);
-    setError("");
+    setEditError("");
     const validationError = validateFormValues(editForm);
     if (validationError) {
       setEditing(false);
-      setError(validationError);
+      setEditError(validationError);
       return;
     }
 
@@ -238,8 +263,9 @@ export default function BatchesPage() {
       setBatches((prev) => prev.map((b) => (b._id === editingBatchId ? payload : b)));
       setShowEditForm(false);
       setEditingBatchId(null);
+      setEditError("");
     } catch (err: any) {
-      setError(err?.message || "Failed to update batch");
+      setEditError(err?.message || "Failed to update batch");
     } finally {
       setEditing(false);
     }
@@ -255,40 +281,60 @@ export default function BatchesPage() {
     });
     setShowHarvestForm(true);
     setError("");
+    setHarvestError("");
+  }
+
+  function startReopen(batch: Batch) {
+    setReopenForm({
+      restoreCount: String(batch.currentCount > 0 ? batch.currentCount : batch.initialCount),
+      tankId: "",
+    });
+    setConfirmError("");
+    setConfirmAction({ kind: "reopen", batch });
   }
 
   async function confirmHarvest(e: React.FormEvent) {
     e.preventDefault();
     if (!harvestBatchId) return;
+    const batch = batches.find((item) => item._id === harvestBatchId);
+    if (!batch) {
+      setHarvestError("Selected batch could not be found");
+      return;
+    }
 
     setHarvesting(true);
-    setError("");
+    setHarvestError("");
     const validationError = validateHarvestValues(harvestForm);
     if (validationError) {
       setHarvesting(false);
-      setError(validationError);
+      setHarvestError(validationError);
       return;
     }
 
     try {
-      const res = await fetch(`/api/batches/${harvestBatchId}`, {
-        method: "PATCH",
+      const res = await fetch("/api/harvest", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: "harvested",
-          harvestDate: harvestForm.harvestDate,
-          harvestedWeightKg: harvestForm.harvestedWeightKg,
-          harvestPricePerKg: harvestForm.harvestPricePerKg,
+          batchId: harvestBatchId,
+          fishSold: batch.currentCount,
+          date: harvestForm.harvestDate,
+          weightKg: harvestForm.harvestedWeightKg,
+          pricePerKg: harvestForm.harvestPricePerKg,
+          buyer: "",
+          channel: "other",
+          markBatchHarvested: true,
           harvestNotes: harvestForm.harvestNotes,
         }),
       });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload?.error || "Failed to mark harvested");
-      setBatches((prev) => prev.map((b) => (b._id === harvestBatchId ? payload : b)));
+      await loadBatches();
       setShowHarvestForm(false);
       setHarvestBatchId(null);
+      setHarvestError("");
     } catch (err: any) {
-      setError(err?.message || "Failed to mark harvested");
+      setHarvestError(err?.message || "Failed to mark harvested");
     } finally {
       setHarvesting(false);
     }
@@ -296,28 +342,23 @@ export default function BatchesPage() {
 
   async function reopenBatch(batch: Batch) {
     setBusyBatchId(batch._id);
-    setError("");
+    setConfirmError("");
 
     try {
-      const res = await fetch(`/api/batches/${batch._id}`, {
-        method: "PATCH",
+      const res = await fetch(`/api/batches/${batch._id}/reopen`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "active" }),
+        body: JSON.stringify({
+          restoreCount: Number(reopenForm.restoreCount || 0),
+          tankId: reopenForm.tankId || undefined,
+        }),
       });
       const payload = await res.json();
-      if (!res.ok) {
-        if (payload?.code === "PLAN_LIMIT_ACTIVE_BATCHES") {
-          setShowUpgradeModal(true);
-          setUpgradeModalMessage(
-            payload?.error || "You have reached your active batch limit for this plan. Upgrade to add more."
-          );
-          return;
-        }
-        throw new Error(payload?.error || "Failed to reopen batch");
-      }
-      setBatches((prev) => prev.map((b) => (b._id === batch._id ? payload : b)));
+      if (!res.ok) throw new Error(payload?.error || "Failed to reopen batch");
+      await loadBatches();
+      setConfirmAction(null);
     } catch (err: any) {
-      setError(err?.message || "Failed to reopen batch");
+      setConfirmError(err?.message || "Failed to reopen batch");
     } finally {
       setBusyBatchId(null);
     }
@@ -325,7 +366,7 @@ export default function BatchesPage() {
 
   async function deleteBatch(batch: Batch) {
     setDeletingBatchId(batch._id);
-    setError("");
+    setConfirmError("");
 
     try {
       const res = await fetch(`/api/batches/${batch._id}`, { method: "DELETE" });
@@ -333,7 +374,7 @@ export default function BatchesPage() {
       if (!res.ok) throw new Error(payload?.error || "Failed to delete batch");
       setBatches((prev) => prev.filter((b) => b._id !== batch._id));
     } catch (err: any) {
-      setError(err?.message || "Failed to delete batch");
+      setConfirmError(err?.message || "Failed to delete batch");
     } finally {
       setDeletingBatchId(null);
     }
@@ -342,9 +383,11 @@ export default function BatchesPage() {
   async function confirmAndRunAction() {
     if (!confirmAction) return;
     const action = confirmAction;
-    setConfirmAction(null);
     if (action.kind === "reopen") await reopenBatch(action.batch);
-    else await deleteBatch(action.batch);
+    else {
+      setConfirmAction(null);
+      await deleteBatch(action.batch);
+    }
   }
 
   const PHASE_COLORS: Record<string, string> = {
@@ -459,19 +502,31 @@ export default function BatchesPage() {
           <div className="glass-card w-full max-w-md max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-display text-lg text-pond-100">New Batch</h2>
-              <button onClick={() => setShowForm(false)} className="text-pond-200/75 hover:text-pond-300">
+              <button
+                onClick={() => {
+                  setCreateError("");
+                  setShowForm(false);
+                }}
+                className="text-pond-200/75 hover:text-pond-300"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <form onSubmit={create} className="space-y-4">
+              {createError && (
+                <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10">
+                  {createError}
+                </div>
+              )}
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Batch Name</label>
                 <input className="field" required placeholder="Batch A - January Juveniles" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-pond-300 mb-1.5 font-medium">Fish Count</label>
+                  <label className="block text-xs text-pond-300 mb-1.5 font-medium">Initial Fish Count</label>
                   <input className="field" type="number" min={1} required placeholder="1000" value={form.initialCount} onChange={(e) => setForm((f) => ({ ...f, initialCount: +e.target.value }))} />
+                  <p className="text-xs text-pond-200/60 mt-1">Original stocked fish count. Use Reopen Batch or Tanks flows to repair live fish totals.</p>
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Juvenile Cost (₦)</label>
@@ -495,7 +550,16 @@ export default function BatchesPage() {
                 <textarea className="field resize-none" rows={2} placeholder="Stocked from Ibadan hatchery" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowForm(false)} className="btn-secondary flex-1">Cancel</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreateError("");
+                    setShowForm(false);
+                  }}
+                  className="btn-secondary flex-1"
+                >
+                  Cancel
+                </button>
                 <button type="submit" disabled={creating} className="btn-primary flex-1">
                   {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                   {creating ? "Creating…" : "Create Batch"}
@@ -511,19 +575,32 @@ export default function BatchesPage() {
           <div className="glass-card w-full max-w-md max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-display text-lg text-pond-100">Edit Batch</h2>
-              <button onClick={() => { setShowEditForm(false); setEditingBatchId(null); }} className="text-pond-200/75 hover:text-pond-300">
+              <button
+                onClick={() => {
+                  setEditError("");
+                  setShowEditForm(false);
+                  setEditingBatchId(null);
+                }}
+                className="text-pond-200/75 hover:text-pond-300"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <form onSubmit={saveEdit} className="space-y-4">
+              {editError && (
+                <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10">
+                  {editError}
+                </div>
+              )}
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Batch Name</label>
                 <input className="field" required placeholder="Batch A - January Juveniles" value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-pond-300 mb-1.5 font-medium">Fish Count</label>
+                  <label className="block text-xs text-pond-300 mb-1.5 font-medium">Initial Fish Count</label>
                   <input className="field" type="number" min={1} required placeholder="1000" value={editForm.initialCount} onChange={(e) => setEditForm((f) => ({ ...f, initialCount: +e.target.value }))} />
+                  <p className="text-xs text-pond-200/60 mt-1">Original stocked fish count only. This does not change the current fish alive in tanks.</p>
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Juvenile Cost (₦)</label>
@@ -547,7 +624,17 @@ export default function BatchesPage() {
                 <textarea className="field resize-none" rows={2} placeholder="Stocked from Ibadan hatchery" value={editForm.notes} onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))} />
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => { setShowEditForm(false); setEditingBatchId(null); }} className="btn-secondary flex-1">Cancel</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditError("");
+                    setShowEditForm(false);
+                    setEditingBatchId(null);
+                  }}
+                  className="btn-secondary flex-1"
+                >
+                  Cancel
+                </button>
                 <button type="submit" disabled={editing} className="btn-primary flex-1">
                   {editing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                   {editing ? "Saving…" : "Save Changes"}
@@ -563,11 +650,23 @@ export default function BatchesPage() {
           <div className="glass-card w-full max-w-md max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-display text-lg text-pond-100">Confirm Harvest</h2>
-              <button onClick={() => { setShowHarvestForm(false); setHarvestBatchId(null); }} className="text-pond-200/75 hover:text-pond-300">
+              <button
+                onClick={() => {
+                  setHarvestError("");
+                  setShowHarvestForm(false);
+                  setHarvestBatchId(null);
+                }}
+                className="text-pond-200/75 hover:text-pond-300"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <form onSubmit={confirmHarvest} className="space-y-4">
+              {harvestError && (
+                <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10">
+                  {harvestError}
+                </div>
+              )}
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Harvest Date</label>
                 <div className="date-field-wrap">
@@ -579,11 +678,11 @@ export default function BatchesPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Harvested Weight (kg)</label>
-                  <input className="field" type="number" min={0} step="0.1" placeholder="850" value={harvestForm.harvestedWeightKg} onChange={(e) => setHarvestForm((f) => ({ ...f, harvestedWeightKg: +e.target.value }))} />
+                  <input className="field" type="number" min={0.1} step="0.1" placeholder="850" value={harvestForm.harvestedWeightKg} onChange={(e) => setHarvestForm((f) => ({ ...f, harvestedWeightKg: +e.target.value }))} />
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Price/kg (₦)</label>
-                  <input className="field" type="number" min={0} placeholder="2200" value={harvestForm.harvestPricePerKg} onChange={(e) => setHarvestForm((f) => ({ ...f, harvestPricePerKg: +e.target.value }))} />
+                  <input className="field" type="number" min={1} placeholder="2200" value={harvestForm.harvestPricePerKg} onChange={(e) => setHarvestForm((f) => ({ ...f, harvestPricePerKg: +e.target.value }))} />
                 </div>
               </div>
               <div>
@@ -591,7 +690,17 @@ export default function BatchesPage() {
                 <textarea className="field resize-none" rows={2} placeholder="Sold to local market buyers" value={harvestForm.harvestNotes} onChange={(e) => setHarvestForm((f) => ({ ...f, harvestNotes: e.target.value }))} />
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => { setShowHarvestForm(false); setHarvestBatchId(null); }} className="btn-secondary flex-1">Cancel</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHarvestError("");
+                    setShowHarvestForm(false);
+                    setHarvestBatchId(null);
+                  }}
+                  className="btn-secondary flex-1"
+                >
+                  Cancel
+                </button>
                 <button type="submit" disabled={harvesting} className="btn-primary flex-1">
                   {harvesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
                   {harvesting ? "Saving…" : "Mark Harvested"}
@@ -609,17 +718,58 @@ export default function BatchesPage() {
               <h2 className="font-display text-lg text-pond-100">
                 {confirmAction.kind === "delete" ? "Delete Batch" : "Reopen Batch"}
               </h2>
-              <button onClick={() => setConfirmAction(null)} className="text-pond-200/75 hover:text-pond-300">
+              <button onClick={() => { setConfirmAction(null); setConfirmError(""); }} className="text-pond-200/75 hover:text-pond-300">
                 <X className="w-5 h-5" />
               </button>
             </div>
+            {confirmError && (
+              <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10">
+                {confirmError}
+              </div>
+            )}
             <p className="text-sm text-pond-200/75">
               {confirmAction.kind === "delete"
                 ? `Delete ${confirmAction.batch.name}? This will remove it from your active records.`
-                : `Reopen ${confirmAction.batch.name}? Harvest metadata will be cleared.`}
+                : `Reopen ${confirmAction.batch.name}? Harvest metadata will be cleared and the restored fish count will become the live batch total again.`}
             </p>
+            {confirmAction.kind === "reopen" && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs text-pond-300 mb-1.5 font-medium">Restore Fish Alive</label>
+                  <input
+                    className="field"
+                    type="number"
+                    min={1}
+                    placeholder="537"
+                    value={reopenForm.restoreCount}
+                    onChange={(e) => setReopenForm((form) => ({ ...form, restoreCount: e.target.value }))}
+                  />
+                  <p className="text-xs text-pond-200/60 mt-1">
+                    Enter the correct remaining fish count for this batch.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs text-pond-300 mb-1.5 font-medium">Assign to Tank (optional)</label>
+                  <select
+                    className="field"
+                    value={reopenForm.tankId}
+                    onChange={(e) => setReopenForm((form) => ({ ...form, tankId: e.target.value }))}
+                  >
+                    <option value="">Leave fish unassigned</option>
+                    {tanks.map((tank) => (
+                      <option key={tank._id} value={tank._id}>
+                        {tank.name} ({Number(tank.currentFish || 0).toLocaleString()} fish)
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-pond-200/60 mt-1">
+                    Pick the tank that already shows these fish, or leave blank and allocate later from Tanks.
+                  </p>
+                </div>
+              </div>
+            )}
             <div className="flex gap-3 pt-1">
-              <button type="button" onClick={() => setConfirmAction(null)} className="btn-secondary flex-1">
+              <button type="button" onClick={() => { setConfirmAction(null); setConfirmError(""); }} className="btn-secondary flex-1">
                 Cancel
               </button>
               <button
@@ -709,10 +859,10 @@ export default function BatchesPage() {
 
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <button className="btn-secondary !px-3 !py-2 text-xs" onClick={() => startEdit(batch)} disabled={rowBusy}>Edit</button>
-                  {batch.status === "active" ? (
+                  {batch.status !== "harvested" ? (
                     <button className="btn-secondary !px-3 !py-2 text-xs" onClick={() => startHarvest(batch)} disabled={rowBusy}>Mark Harvested</button>
                   ) : (
-                    <button className="btn-secondary !px-3 !py-2 text-xs" onClick={() => setConfirmAction({ kind: "reopen", batch })} disabled={rowBusy}>
+                    <button className="btn-secondary !px-3 !py-2 text-xs" onClick={() => startReopen(batch)} disabled={rowBusy}>
                       {busyBatchId === batch._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Reopen Batch"}
                     </button>
                   )}

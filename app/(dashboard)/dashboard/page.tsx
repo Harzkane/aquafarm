@@ -6,6 +6,7 @@ import { DailyLog } from "@/models/DailyLog";
 import { Financial } from "@/models/Financial";
 import { Tank } from "@/models/Tank";
 import { FeedInventory } from "@/models/FeedInventory";
+import { CalendarEvent } from "@/models/CalendarEvent";
 import DashboardClient from "./DashboardClient";
 import { getBatchPhase, weeksSince } from "@/lib/utils";
 import { summarizeFeedInventory } from "@/lib/feed-inventory";
@@ -16,20 +17,34 @@ export default async function DashboardPage() {
 
   await connectDB();
 
-  const batches = await Batch.find({ userId, status: "active" }).lean<any[]>();
-  const tanks = await Tank.find({ userId }).lean<any[]>();
-  const financials = await Financial.findOne({ userId }).lean<any>();
-  const feedInventory = await FeedInventory.findOne({ userId }).lean<any>();
-
-  // Get last 30 days of logs for active batches
-  const batchIds = batches.map((b: any) => b._id);
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const [recentLogs, feedLogs] = await Promise.all([
+  const [batches, tanks, financials, feedInventory, recentLogs, feedLogs, calendarEvents] = await Promise.all([
+    Batch.find({
+      userId,
+      status: { $in: ["active", "partial"] },
+      $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
+    }).lean<any[]>(),
+    Tank.find({ userId }).lean<any[]>(),
+    Financial.findOne({ userId }).lean<any>(),
+    FeedInventory.findOne({ userId }).lean<any>(),
     DailyLog.find({
-      userId, batchId: { $in: batchIds }, date: { $gte: thirtyDaysAgo }
+      userId,
+      date: { $gte: thirtyDaysAgo },
     }).sort({ date: 1 }).lean(),
     DailyLog.find({ userId }).select("date feedGiven feedType feedBrand feedSizeMm").lean(),
+    CalendarEvent.find({ userId }).select("batchId kind milestoneWeek").lean<any[]>(),
   ]);
+
+  const completedMilestones = new Set(
+    calendarEvents.map((event: any) => `${String(event.batchId)}:${String(event.kind)}:${Number(event.milestoneWeek)}`)
+  );
+  const milestones: Array<{ week: number; kind: "sort" | "harvest"; label: string; dueNowLabel: string; dueSoonLabel: string }> = [
+    { week: 3, kind: "sort", label: "Sort 1", dueNowLabel: "Sort 1 due", dueSoonLabel: "Sort 1 due within 1 week" },
+    { week: 8, kind: "sort", label: "Sort 2", dueNowLabel: "Sort 2 due", dueSoonLabel: "Sort 2 due within 1 week" },
+    { week: 14, kind: "sort", label: "Sort 3", dueNowLabel: "Sort 3 due", dueSoonLabel: "Sort 3 due within 1 week" },
+    { week: 17, kind: "sort", label: "Pre-harvest sort", dueNowLabel: "Pre-harvest sort due", dueSoonLabel: "Pre-harvest sort due within 1 week" },
+    { week: 18, kind: "harvest", label: "Harvest", dueNowLabel: "Harvest now!", dueSoonLabel: "Harvest due within 1 week" },
+  ];
 
   // Aggregate stats
   const totalFish    = batches.reduce((s: number, b: any) => s + (b.currentCount || 0), 0);
@@ -66,13 +81,21 @@ export default async function DashboardPage() {
   } else {
     for (const batch of batches) {
       const weeks = weeksSince(batch.stockingDate);
-      const { next, nextWeek } = getBatchPhase(weeks);
-      const weeksToNext = nextWeek - weeks;
+      const nextMilestone = milestones.find((milestone) => {
+        const done =
+          completedMilestones.has(`${String(batch._id)}:${milestone.kind}:${milestone.week}`) ||
+          (milestone.kind === "harvest" && batch.status === "harvested");
+        return !done;
+      });
+
+      if (!nextMilestone) continue;
+
+      const weeksToNext = nextMilestone.week - weeks;
       if (weeksToNext >= 0 && weeksToNext <= 1) {
         actions.push({
           level: "warning",
-          title: `${batch.name}: ${next}`,
-          detail: weeksToNext === 0 ? "Due now." : "Due within 1 week.",
+          title: `${batch.name}: ${weeksToNext === 0 ? nextMilestone.dueNowLabel : nextMilestone.label}`,
+          detail: weeksToNext === 0 ? "Due now." : nextMilestone.dueSoonLabel,
           href: "/calendar",
         });
       }
@@ -153,12 +176,46 @@ export default async function DashboardPage() {
     });
   }
 
+  const batchSummaries = batches.map((batch: any) => {
+    const batchId = String(batch._id);
+    const batchLogs = recentLogs.filter((log: any) => String(log.batchId || "") === batchId);
+    const batchExpenses = expenses.filter((entry: any) => String(entry.batchId || "") === batchId);
+    const batchRevenue = revenues.filter((entry: any) => String(entry.batchId || "") === batchId);
+
+    const batchChartData = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split("T")[0];
+      const dayLogs = batchLogs.filter((log: any) => new Date(log.date).toISOString().split("T")[0] === dateStr);
+      batchChartData.push({
+        date: d.toLocaleDateString("en-NG", { month: "short", day: "numeric" }),
+        feed: dayLogs.reduce((s: number, log: any) => s + (log.feedGiven || 0), 0),
+        mortality: dayLogs.reduce((s: number, log: any) => s + (log.mortality || 0), 0),
+      });
+    }
+
+    return {
+      batchId,
+      totalFish: Number(batch.currentCount || 0),
+      totalInitial: Number(batch.initialCount || 0),
+      totalFeedToday: batchLogs
+        .filter((log: any) => new Date(log.date).toDateString() === new Date().toDateString())
+        .reduce((s: number, log: any) => s + (log.feedGiven || 0), 0),
+      totalMortality30d: batchLogs.reduce((s: number, log: any) => s + (log.mortality || 0), 0),
+      totalExpenses: batchExpenses.reduce((s: number, entry: any) => s + Number(entry.amount || 0), 0),
+      totalRevenue: batchRevenue.reduce((s: number, entry: any) => s + Number(entry.totalAmount || 0), 0),
+      chartData: batchChartData,
+    };
+  });
+
   const props = {
     totalFish, totalInitial, totalFeedToday,
     totalMortality30d, totalExpenses, totalRevenue,
     activeBatches: batches.length,
     totalTanks: tanks.length,
     chartData,
+    batchSummaries,
     actions: actions.slice(0, 4),
     batches: JSON.parse(JSON.stringify(batches)),
     tanks: JSON.parse(JSON.stringify(tanks)),

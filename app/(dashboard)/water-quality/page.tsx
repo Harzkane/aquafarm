@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, Loader2, TestTube2, CheckCircle2, Search, X, CalendarDays } from "lucide-react";
 
 type Batch = { _id: string; name: string };
+type TankOption = { _id: string; name: string };
 type WaterLog = {
   _id: string;
   date: string;
@@ -37,9 +38,11 @@ export default function WaterQualityPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [logs, setLogs] = useState<WaterLog[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [tankOptions, setTankOptions] = useState<TankOption[]>([]);
   const [isFreePlan, setIsFreePlan] = useState(false);
   const communitySupportHref = process.env.NEXT_PUBLIC_COMMUNITY_SUPPORT_URL || "";
 
@@ -64,18 +67,22 @@ export default function WaterQualityPage() {
     setLoading(true);
     setError("");
     try {
-      const [logsRes, batchRes, billingRes] = await Promise.all([
+      const [logsRes, batchRes, tanksRes, billingRes] = await Promise.all([
         fetch("/api/water-quality?limit=5000"),
         fetch("/api/batches"),
+        fetch("/api/tanks"),
         fetch("/api/billing/status"),
       ]);
       const logsPayload = await logsRes.json();
       const batchesPayload = await batchRes.json();
+      const tanksPayload = await tanksRes.json();
       const billingPayload = billingRes.ok ? await billingRes.json() : null;
       if (!logsRes.ok) throw new Error(logsPayload?.error || "Failed to load water logs");
       if (!batchRes.ok) throw new Error(batchesPayload?.error || "Failed to load batches");
+      if (!tanksRes.ok) throw new Error(tanksPayload?.error || "Failed to load tanks");
       setLogs(Array.isArray(logsPayload) ? logsPayload : []);
       setBatches(Array.isArray(batchesPayload) ? batchesPayload : []);
+      setTankOptions(Array.isArray(tanksPayload) ? tanksPayload : []);
       setIsFreePlan((billingPayload?.plan || "free") === "free");
       if (!form.batchId && batchesPayload?.[0]?._id) {
         setForm((f) => ({ ...f, batchId: batchesPayload[0]._id }));
@@ -142,7 +149,7 @@ export default function WaterQualityPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    setError("");
+    setFormError("");
     try {
       const payload: any = {
         ...form,
@@ -163,7 +170,7 @@ export default function WaterQualityPage() {
       setForm((f) => ({ ...f, ph: "", ammonia: "", temperature: "", dissolvedO2: "", observations: "" }));
       await loadData();
     } catch (err: any) {
-      setError(err?.message || "Failed to save reading");
+      setFormError(err?.message || "Failed to save reading");
     } finally {
       setSaving(false);
     }
@@ -184,7 +191,7 @@ export default function WaterQualityPage() {
           <h1 className="font-display text-2xl font-semibold text-pond-100">Water Quality</h1>
           <p className="text-pond-200/75 text-sm mt-1">Dedicated pH/ammonia/temperature/DO monitoring by batch</p>
         </div>
-        <button className="btn-primary" onClick={() => setShowForm(true)}>
+        <button className="btn-primary" onClick={() => { setFormError(""); setShowForm(true); }}>
           <Plus className="w-4 h-4" /> Add Reading
         </button>
       </div>
@@ -332,10 +339,11 @@ export default function WaterQualityPage() {
           <div className="glass-card w-full max-w-2xl max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-display text-lg text-pond-100">New Water Reading</h2>
-              <button onClick={() => setShowForm(false)} className="text-pond-200/75 hover:text-pond-300">
+              <button onClick={() => { setShowForm(false); setFormError(""); }} className="text-pond-200/75 hover:text-pond-300">
                 <X className="w-5 h-5" />
               </button>
             </div>
+            {formError && <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10 mb-4">{formError}</div>}
             <form onSubmit={submit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -368,7 +376,14 @@ export default function WaterQualityPage() {
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Tank</label>
-                  <input className="field" placeholder="Tank 4" value={form.tankName} onChange={(e) => setField("tankName", e.target.value)} />
+                  <select className="field" value={form.tankName} onChange={(e) => setField("tankName", e.target.value)}>
+                    <option value="All Tanks">All Tanks</option>
+                    {tankOptions.map((tank) => (
+                      <option key={tank._id} value={tank.name}>
+                        {tank.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -411,7 +426,7 @@ export default function WaterQualityPage() {
                 <textarea className="field resize-none" rows={3} placeholder="Water slightly cloudy after morning feed" value={form.observations} onChange={(e) => setField("observations", e.target.value)} />
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowForm(false)} className="btn-secondary flex-1">
+                <button type="button" onClick={() => { setShowForm(false); setFormError(""); }} className="btn-secondary flex-1">
                   Cancel
                 </button>
                 <button type="submit" disabled={saving} className="btn-primary flex-1">

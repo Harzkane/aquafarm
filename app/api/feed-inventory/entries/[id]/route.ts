@@ -4,7 +4,8 @@ import { Types } from "mongoose";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { FeedInventory } from "@/models/FeedInventory";
-import { getFeedIdentity } from "@/lib/feed-inventory";
+import { DailyLog } from "@/models/DailyLog";
+import { getFeedIdentity, getFeedProductBalances } from "@/lib/feed-inventory";
 
 function validateBody(body: any) {
   const date = body?.date ? new Date(body.date) : new Date();
@@ -51,11 +52,38 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   await connectDB();
   const userId = (session.user as any).id;
-  const inv = await FeedInventory.findOne({ userId });
+  const [inv, logs] = await Promise.all([
+    FeedInventory.findOne({ userId }),
+    DailyLog.find({ userId }).select("feedGiven date feedType feedBrand feedSizeMm").lean<any[]>(),
+  ]);
   if (!inv) return NextResponse.json({ error: "Feed inventory not found" }, { status: 404 });
 
   const entry = inv.purchases.id(params.id);
   if (!entry) return NextResponse.json({ error: "Purchase not found" }, { status: 404 });
+  const hypotheticalPurchases = inv.purchases.map((purchase: any) => {
+    if (String(purchase._id) !== params.id) return purchase.toObject ? purchase.toObject() : purchase;
+    return {
+      ...(purchase.toObject ? purchase.toObject() : purchase),
+      ...validated.value,
+    };
+  });
+  const invalidBalance = getFeedProductBalances(
+    {
+      openingStockKg: inv.openingStockKg,
+      openingStockBrand: inv.openingStockBrand,
+      openingStockSizeMm: inv.openingStockSizeMm,
+      purchases: hypotheticalPurchases,
+    },
+    logs,
+  ).find((product) => product.remainingKg < 0);
+  if (invalidBalance) {
+    return NextResponse.json(
+      {
+        error: `${invalidBalance.label} already has ${invalidBalance.consumedKg.toFixed(2)}kg consumed. Increase stocked quantity or correct feed logs before reducing this purchase.`,
+      },
+      { status: 409 },
+    );
+  }
   Object.assign(entry, validated.value);
   inv.updatedAt = new Date();
   await inv.save();
@@ -69,11 +97,34 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 
   await connectDB();
   const userId = (session.user as any).id;
-  const inv = await FeedInventory.findOne({ userId });
+  const [inv, logs] = await Promise.all([
+    FeedInventory.findOne({ userId }),
+    DailyLog.find({ userId }).select("feedGiven date feedType feedBrand feedSizeMm").lean<any[]>(),
+  ]);
   if (!inv) return NextResponse.json({ error: "Feed inventory not found" }, { status: 404 });
 
   const entry = inv.purchases.id(params.id);
   if (!entry) return NextResponse.json({ error: "Purchase not found" }, { status: 404 });
+  const hypotheticalPurchases = inv.purchases
+    .filter((purchase: any) => String(purchase._id) !== params.id)
+    .map((purchase: any) => (purchase.toObject ? purchase.toObject() : purchase));
+  const invalidBalance = getFeedProductBalances(
+    {
+      openingStockKg: inv.openingStockKg,
+      openingStockBrand: inv.openingStockBrand,
+      openingStockSizeMm: inv.openingStockSizeMm,
+      purchases: hypotheticalPurchases,
+    },
+    logs,
+  ).find((product) => product.remainingKg < 0);
+  if (invalidBalance) {
+    return NextResponse.json(
+      {
+        error: `${invalidBalance.label} already has ${invalidBalance.consumedKg.toFixed(2)}kg consumed. You cannot delete this purchase without first correcting feed logs or adding replacement stock.`,
+      },
+      { status: 409 },
+    );
+  }
   entry.deleteOne();
   inv.updatedAt = new Date();
   await inv.save();

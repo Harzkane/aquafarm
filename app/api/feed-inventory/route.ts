@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { FeedInventory } from "@/models/FeedInventory";
 import { DailyLog } from "@/models/DailyLog";
-import { summarizeFeedInventory, getFeedIdentity } from "@/lib/feed-inventory";
+import { getFeedIdentity, getFeedProductBalances, summarizeFeedInventory } from "@/lib/feed-inventory";
 
 type PurchasePayload = {
   date?: string;
@@ -77,6 +77,9 @@ export async function GET() {
     openingStockKg: summary.openingStockKg,
     openingStockBrand: inventory?.openingStockBrand || "",
     openingStockSizeMm: inventory?.openingStockSizeMm ?? null,
+    openingStockDate: inventory?.openingStockDate ?? null,
+    openingStockTotalCost: Number(inventory?.openingStockTotalCost || 0),
+    openingStockSupplier: inventory?.openingStockSupplier || "",
     purchases,
     products: summary.products,
     lowStockProducts: summary.lowStockProducts,
@@ -132,6 +135,8 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json();
   const openingStockKg = Number(body?.openingStockKg);
+  const openingStockTotalCost = Number(body?.openingStockTotalCost || 0);
+  const openingStockDate = body?.openingStockDate ? new Date(body.openingStockDate) : null;
   const identity = getFeedIdentity({
     brand: String(body?.openingStockBrand || "").trim(),
     pelletSizeMm: body?.openingStockSizeMm,
@@ -139,20 +144,51 @@ export async function PATCH(req: NextRequest) {
   if (!Number.isFinite(openingStockKg) || openingStockKg < 0) {
     return NextResponse.json({ error: "Opening stock must be a non-negative number" }, { status: 400 });
   }
+  if (!Number.isFinite(openingStockTotalCost) || openingStockTotalCost < 0) {
+    return NextResponse.json({ error: "Opening stock value cannot be negative" }, { status: 400 });
+  }
+  if (openingStockDate && Number.isNaN(openingStockDate.getTime())) {
+    return NextResponse.json({ error: "Opening stock date is invalid" }, { status: 400 });
+  }
+  const openingStockSupplier = String(body?.openingStockSupplier || "").trim();
 
   const userId = (session.user as any).id;
   await connectDB();
-  const inventory = await FeedInventory.findOneAndUpdate(
+  const [inventory, logs] = await Promise.all([
+    FeedInventory.findOne({ userId }),
+    DailyLog.find({ userId }).select("feedGiven date feedType feedBrand feedSizeMm").lean<any[]>(),
+  ]);
+
+  const hypotheticalInventory = {
+    openingStockKg,
+    openingStockBrand: identity.brand,
+    openingStockSizeMm: identity.pelletSizeMm,
+    purchases: inventory?.purchases || [],
+  };
+  const invalidBalance = getFeedProductBalances(hypotheticalInventory, logs).find((product) => product.remainingKg < 0);
+  if (invalidBalance) {
+    return NextResponse.json(
+      {
+        error: `${invalidBalance.label} already has ${invalidBalance.consumedKg.toFixed(2)}kg consumed. Increase stocked quantity or correct feed logs before reducing opening stock.`,
+      },
+      { status: 409 },
+    );
+  }
+
+  const nextInventory = await FeedInventory.findOneAndUpdate(
     { userId },
     {
       $set: {
         openingStockKg,
         openingStockBrand: identity.brand,
         openingStockSizeMm: identity.pelletSizeMm,
+        openingStockDate,
+        openingStockTotalCost,
+        openingStockSupplier,
         updatedAt: new Date(),
       },
     },
     { upsert: true, new: true }
   );
-  return NextResponse.json(inventory);
+  return NextResponse.json(nextInventory);
 }

@@ -209,9 +209,9 @@ export default function ReportsPage() {
           <p className="text-xs text-pond-200/65 mt-1">{financialHealth}</p>
         </div>
         <div className="stat-card">
-          <p className="text-xs text-pond-200/75 uppercase tracking-wider mb-2">Survival Rate</p>
+          <p className="text-xs text-pond-200/75 uppercase tracking-wider mb-2">Current Survival</p>
           <p className={`font-mono text-2xl font-semibold ${summary.survivalRate >= 85 ? "text-success" : "text-warning"}`}>{summary.survivalRate.toFixed(1)}%</p>
-          <p className="text-xs text-pond-200/65 mt-1">{summary.fishAlive.toLocaleString()} fish alive</p>
+          <p className="text-xs text-pond-200/65 mt-1">{summary.fishAlive.toLocaleString()} fish alive right now</p>
         </div>
         <div className="stat-card">
           <p className="text-xs text-pond-200/75 uppercase tracking-wider mb-2">Feed Used</p>
@@ -267,6 +267,9 @@ export default function ReportsPage() {
 
       <div className="glass-card p-5 space-y-3">
         <h2 className="section-title !text-base">Operational Highlights</h2>
+        <p className="text-xs text-pond-200/65">
+          Current survival is a live farm snapshot. Revenue, feed, mortality, and charts follow the selected report range.
+        </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="rounded-xl p-3" style={{ background: "rgba(12, 12, 14,0.5)", border: "1px solid rgba(148, 163, 184,0.12)" }}>
             <p className="text-xs text-pond-200/65">Active Batches</p>

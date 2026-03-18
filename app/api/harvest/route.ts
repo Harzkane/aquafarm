@@ -4,10 +4,9 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Financial } from "@/models/Financial";
 import { Batch } from "@/models/Batch";
-import { Tank } from "@/models/Tank";
 import { runAtomic } from "@/lib/transactions";
 import { validateHarvestPayload } from "@/lib/validators/harvest";
-import { normalizeTankAllocations, syncTankOccupancy } from "@/lib/tank-allocations";
+import { removeFishFromBatchAllocations } from "@/lib/tank-allocations";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -85,6 +84,21 @@ export async function POST(req: NextRequest) {
     }).session(txSession || null);
     if (!batch) return { error: "Batch not found", status: 404 as const };
 
+    const currentCount = Math.max(0, Math.trunc(Number(batch.currentCount || 0)));
+    const harvestedFishCount = Math.max(0, Math.trunc(Number(payload.fishSold || 0)));
+    if (currentCount <= 0) {
+      return { error: "This batch has no fish left to harvest", status: 400 as const };
+    }
+    if (harvestedFishCount > currentCount) {
+      return { error: `You can only harvest up to ${currentCount.toLocaleString()} fish from this batch`, status: 400 as const };
+    }
+    if (payload.markBatchHarvested && harvestedFishCount !== currentCount) {
+      return {
+        error: `To mark this batch fully harvested, set Fish Sold to ${currentCount.toLocaleString()} or untick the full-harvest option`,
+        status: 400 as const,
+      };
+    }
+
     let fin = await Financial.findOne({ userId }).session(txSession || null);
     if (!fin) {
       const created = await Financial.create([{ userId, expenses: [], revenue: [] }], {
@@ -107,31 +121,31 @@ export async function POST(req: NextRequest) {
     fin.updatedAt = new Date();
     await fin.save({ session: txSession || undefined });
 
-    if (payload.markBatchHarvested) {
-      const allocations = normalizeTankAllocations(batch.tankAllocations);
-      const tankIds = allocations.map((item) => item.tankId).filter(Boolean);
-      if (tankIds.length > 0) {
-        const tanks = await Tank.find({ userId, _id: { $in: tankIds } }).session(txSession || null);
-        await Promise.all(
-          tanks.map(async (tank) => {
-            const allocated = allocations
-              .filter((item) => item.tankId === String(tank._id))
-              .reduce((sum, item) => sum + Number(item.fishCount || 0), 0);
-            tank.currentFish = Math.max(0, Number(tank.currentFish || 0) - allocated);
-            syncTankOccupancy(tank, String(batch._id));
-            await tank.save({ session: txSession || undefined });
-          }),
-        );
-      }
+    if (harvestedFishCount > 0) {
+      await removeFishFromBatchAllocations({
+        batch,
+        userId,
+        count: harvestedFishCount,
+        txSession,
+      });
+      batch.currentCount = Math.max(0, currentCount - harvestedFishCount);
+    }
 
+    const batchFullyHarvested = payload.markBatchHarvested || batch.currentCount <= 0;
+    if (batchFullyHarvested) {
       batch.status = "harvested";
       batch.harvestDate = payload.date ? new Date(payload.date) : new Date();
       batch.harvestedWeightKg = payload.weightKg;
       batch.harvestPricePerKg = payload.pricePerKg;
+      batch.harvestNotes = payload.harvestNotes || "";
       batch.currentCount = 0;
       batch.tankAllocations = [];
-      await batch.save({ session: txSession || undefined });
+    } else if (harvestedFishCount > 0) {
+      batch.status = "partial";
+      if (payload.harvestNotes) batch.harvestNotes = payload.harvestNotes;
     }
+
+    await batch.save({ session: txSession || undefined });
 
     return { created: fin.revenue[fin.revenue.length - 1] };
   });

@@ -5,9 +5,9 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { User } from "@/models/User";
 
-function toBool(value: unknown, fallback: boolean) {
+function toOptionalBool(value: unknown) {
   if (typeof value === "boolean") return value;
-  return fallback;
+  return undefined;
 }
 
 function normalizePhone(value: unknown) {
@@ -67,8 +67,9 @@ export async function PATCH(req: NextRequest) {
   }
 
   const phone = normalizePhone(body?.phone);
-  const whatsappCritical = toBool(body?.alertPrefs?.whatsappCritical, true);
-  const emailCritical = toBool(body?.alertPrefs?.emailCritical, true);
+  const existingPrefs = result.owner.alertPrefs || {};
+  const whatsappCritical = toOptionalBool(body?.alertPrefs?.whatsappCritical);
+  const emailCritical = toOptionalBool(body?.alertPrefs?.emailCritical);
 
   const updated = await User.findByIdAndUpdate(
     result.owner._id,
@@ -76,8 +77,14 @@ export async function PATCH(req: NextRequest) {
       $set: {
         phone,
         alertPrefs: {
-          whatsappCritical,
-          emailCritical,
+          whatsappCritical:
+            whatsappCritical !== undefined
+              ? whatsappCritical
+              : existingPrefs.whatsappCritical !== false,
+          emailCritical:
+            emailCritical !== undefined
+              ? emailCritical
+              : existingPrefs.emailCritical !== false,
         },
       },
     },

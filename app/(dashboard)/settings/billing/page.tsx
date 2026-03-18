@@ -51,6 +51,7 @@ function BillingContent() {
   const checkoutSuccess = searchParams.get("checkout") === "success";
   const callbackReference = searchParams.get("reference") || searchParams.get("trxref") || "";
   const [loading, setLoading] = useState(true);
+  const [refreshingStatus, setRefreshingStatus] = useState(false);
   const [actionLoading, setActionLoading] = useState<
     "pro" | "commercial" | "cancel" | "downgrade" | "complete_onboarding" | "log_checkin" | null
   >(null);
@@ -65,9 +66,11 @@ function BillingContent() {
   const prioritySupportHref = getPriorityWhatsAppHref(billing?.plan || "free");
   const commercialOnboardingHref = process.env.NEXT_PUBLIC_COMMERCIAL_ONBOARDING_URL || "";
   const commercialCheckinHref = process.env.NEXT_PUBLIC_COMMERCIAL_CHECKIN_URL || "";
+  const isOwner = billing?.role !== "staff";
 
-  async function loadStatus() {
-    setLoading(true);
+  async function loadStatus(options?: { initial?: boolean }) {
+    if (options?.initial) setLoading(true);
+    else setRefreshingStatus(true);
     setError("");
     try {
       const res = await fetch("/api/billing/status", { cache: "no-store" });
@@ -77,12 +80,13 @@ function BillingContent() {
     } catch (err: any) {
       setError(err?.message || "Failed to load billing status");
     } finally {
-      setLoading(false);
+      if (options?.initial) setLoading(false);
+      else setRefreshingStatus(false);
     }
   }
 
   useEffect(() => {
-    loadStatus();
+    void loadStatus({ initial: true });
   }, []);
 
   useEffect(() => {
@@ -209,7 +213,10 @@ function BillingContent() {
           <h1 className="font-display text-2xl font-semibold text-pond-100">Billing</h1>
           <p className="mt-1 text-sm text-pond-200/75">Manage your plan and subscription status.</p>
         </div>
-        <CurrentPlanBadge />
+        <div className="flex items-center gap-2">
+          {refreshingStatus ? <Loader2 className="h-4 w-4 animate-spin text-pond-300" /> : null}
+          <CurrentPlanBadge />
+        </div>
       </div>
 
       {error ? (
@@ -284,9 +291,14 @@ function BillingContent() {
             Community support for Starter users
           </a>
         ) : null}
+        {!isOwner ? (
+          <div className="mt-4 rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3 text-sm text-pond-200/75">
+            Billing changes are available to the account owner only. You can still view current plan status here.
+          </div>
+        ) : null}
       </section>
 
-      {billing?.plan === "commercial" ? (
+      {billing?.plan === "commercial" && isOwner ? (
         <section className="glass-card p-5">
           <h2 className="text-lg font-semibold text-pond-100">Success Program</h2>
           <p className="mt-1 text-sm text-pond-200/75">
@@ -394,7 +406,7 @@ function BillingContent() {
         </section>
       ) : null}
 
-      {billing && billing.plan !== "free" ? (
+      {billing && billing.plan !== "free" && isOwner ? (
         <section className="glass-card p-5">
           <h2 className="text-lg font-semibold text-pond-100">Subscription Controls</h2>
           <p className="mt-1 text-sm text-pond-200/75">
@@ -434,7 +446,8 @@ function BillingContent() {
         </section>
       ) : null}
 
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {isOwner ? (
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <article className="glass-card p-5">
           <p className="text-sm text-pond-200/75">Growth Plan</p>
           <h3 className="mt-1 text-lg font-semibold text-pond-100">Pro Founder</h3>
@@ -466,7 +479,8 @@ function BillingContent() {
             {isCurrentPlan("commercial") ? "Current plan" : "Upgrade to Commercial"}
           </button>
         </article>
-      </section>
+        </section>
+      ) : null}
 
       {confirmPlan ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

@@ -181,6 +181,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
       }).session(txSession || null);
       if (!targetBatch) throw new Error("TARGET_BATCH_NOT_FOUND");
+      if (String(targetBatch.status || "") === "harvested") throw new Error("TARGET_BATCH_HARVESTED");
     }
 
     Object.assign(existing, update);
@@ -195,12 +196,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return existing;
   }).catch((error: any) => {
     if (String(error?.message || "") === "TARGET_BATCH_NOT_FOUND") return "TARGET_BATCH_NOT_FOUND" as const;
+    if (String(error?.message || "") === "TARGET_BATCH_HARVESTED") return "TARGET_BATCH_HARVESTED" as const;
     throw error;
   });
 
   if (updatedLog === null) return NextResponse.json({ error: "Log not found" }, { status: 404 });
   if (updatedLog === "TARGET_BATCH_NOT_FOUND") {
     return NextResponse.json({ error: "Target batch not found" }, { status: 404 });
+  }
+  if (updatedLog === "TARGET_BATCH_HARVESTED") {
+    return NextResponse.json({ error: "Daily logs cannot be reassigned to a harvested batch" }, { status: 409 });
   }
 
   const batch = await Batch.findById(updatedLog.batchId).select("name").lean<any>();

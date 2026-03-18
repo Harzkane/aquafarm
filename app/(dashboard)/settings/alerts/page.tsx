@@ -7,7 +7,6 @@ type AlertPrefsPayload = {
   phone: string;
   alertPrefs: {
     whatsappCritical: boolean;
-    emailCritical: boolean;
   };
 };
 
@@ -18,7 +17,6 @@ export default function AlertChannelsSettingsPage() {
   const [notice, setNotice] = useState("");
   const [phone, setPhone] = useState("");
   const [whatsappCritical, setWhatsappCritical] = useState(true);
-  const [emailCritical, setEmailCritical] = useState(true);
 
   async function load() {
     setError("");
@@ -28,7 +26,6 @@ export default function AlertChannelsSettingsPage() {
       if (!res.ok) throw new Error(payload?.error || "Failed to load alert settings");
       setPhone(payload.phone || "");
       setWhatsappCritical(payload.alertPrefs?.whatsappCritical !== false);
-      setEmailCritical(payload.alertPrefs?.emailCritical !== false);
     } catch (err: any) {
       setError(err?.message || "Failed to load alert settings");
     } finally {
@@ -53,7 +50,6 @@ export default function AlertChannelsSettingsPage() {
           phone,
           alertPrefs: {
             whatsappCritical,
-            emailCritical,
           },
         }),
       });
@@ -96,6 +92,9 @@ export default function AlertChannelsSettingsPage() {
           <BellRing className="h-4 w-4 text-water-300" />
           <h2 className="section-title !text-base">Critical Alert Routing</h2>
         </div>
+        <p className="text-xs text-pond-200/65">
+          WhatsApp is the only active outbound channel right now. Additional channels will appear here once delivery is live.
+        </p>
 
         <div>
           <label className="mb-1.5 block text-xs font-medium text-pond-300">WhatsApp recipient phone</label>
@@ -117,15 +116,6 @@ export default function AlertChannelsSettingsPage() {
             onChange={(e) => setWhatsappCritical(e.target.checked)}
           />
           Send critical alerts via WhatsApp
-        </label>
-
-        <label className="flex items-center gap-2 text-sm text-pond-200">
-          <input
-            type="checkbox"
-            checked={emailCritical}
-            onChange={(e) => setEmailCritical(e.target.checked)}
-          />
-          Enable critical email fallback (reserved for next outbound stage)
         </label>
 
         <button type="submit" className="btn-primary" disabled={saving}>

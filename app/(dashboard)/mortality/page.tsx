@@ -75,9 +75,11 @@ export default function MortalityPage() {
   const [editingLog, setEditingLog] = useState<MortalityLog | null>(null);
   const [editForm, setEditForm] = useState<FormState>(initialForm);
   const [editing, setEditing] = useState(false);
+  const [editError, setEditError] = useState("");
 
   const [deletingLog, setDeletingLog] = useState<MortalityLog | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     loadData();
@@ -148,6 +150,7 @@ export default function MortalityPage() {
   function startEdit(log: MortalityLog) {
     setEditingLog(log);
     setEditForm(fromLog(log));
+    setEditError("");
     setError("");
   }
 
@@ -156,7 +159,7 @@ export default function MortalityPage() {
     if (!editingLog) return;
 
     setEditing(true);
-    setError("");
+    setEditError("");
 
     try {
       const res = await fetch(`/api/logs/${editingLog._id}`, {
@@ -170,7 +173,7 @@ export default function MortalityPage() {
       await loadData();
       setEditingLog(null);
     } catch (err: any) {
-      setError(err?.message || "Failed to update log");
+      setEditError(err?.message || "Failed to update log");
     } finally {
       setEditing(false);
     }
@@ -179,7 +182,7 @@ export default function MortalityPage() {
   async function confirmDelete() {
     if (!deletingLog) return;
     setDeleting(true);
-    setError("");
+    setDeleteError("");
 
     try {
       const res = await fetch(`/api/logs/${deletingLog._id}`, { method: "DELETE" });
@@ -189,7 +192,7 @@ export default function MortalityPage() {
       await loadData();
       setDeletingLog(null);
     } catch (err: any) {
-      setError(err?.message || "Failed to delete log");
+      setDeleteError(err?.message || "Failed to delete log");
     } finally {
       setDeleting(false);
     }
@@ -454,8 +457,13 @@ export default function MortalityPage() {
           <div className="glass-card w-full max-w-2xl max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-display text-lg text-pond-100">Edit Mortality Event</h2>
-              <button onClick={() => setEditingLog(null)} className="text-pond-200/75 hover:text-pond-300"><X className="w-5 h-5" /></button>
+              <button onClick={() => { setEditingLog(null); setEditError(""); }} className="text-pond-200/75 hover:text-pond-300"><X className="w-5 h-5" /></button>
             </div>
+            {editError && (
+              <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10 mb-4">
+                {editError}
+              </div>
+            )}
             <form onSubmit={saveEdit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -500,7 +508,7 @@ export default function MortalityPage() {
               </div>
 
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setEditingLog(null)} className="btn-secondary flex-1">Cancel</button>
+                <button type="button" onClick={() => { setEditingLog(null); setEditError(""); }} className="btn-secondary flex-1">Cancel</button>
                 <button type="submit" disabled={editing} className="btn-primary flex-1">
                   {editing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                   {editing ? "Saving…" : "Save Changes"}
@@ -516,11 +524,16 @@ export default function MortalityPage() {
           <div className="glass-card w-full max-w-md max-h-[85vh] overflow-y-auto p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-display text-lg text-pond-100">Delete Mortality Event</h2>
-              <button onClick={() => setDeletingLog(null)} className="text-pond-200/75 hover:text-pond-300"><X className="w-5 h-5" /></button>
+              <button onClick={() => { setDeletingLog(null); setDeleteError(""); }} className="text-pond-200/75 hover:text-pond-300"><X className="w-5 h-5" /></button>
             </div>
+            {deleteError && (
+              <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10">
+                {deleteError}
+              </div>
+            )}
             <p className="text-sm text-pond-200/75">Delete this event? Batch fish count will be reconciled automatically.</p>
             <div className="flex gap-3 pt-1">
-              <button type="button" onClick={() => setDeletingLog(null)} className="btn-secondary flex-1">Cancel</button>
+              <button type="button" onClick={() => { setDeletingLog(null); setDeleteError(""); }} className="btn-secondary flex-1">Cancel</button>
               <button type="button" onClick={confirmDelete} disabled={deleting} className="btn-primary flex-1 bg-red-700 hover:bg-red-600">
                 {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                 {deleting ? "Deleting..." : "Delete"}

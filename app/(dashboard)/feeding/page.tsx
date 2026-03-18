@@ -90,6 +90,7 @@ export default function FeedingPage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [entryError, setEntryError] = useState("");
   const [showEntryForm, setShowEntryForm] = useState(false);
   const [isFreePlan, setIsFreePlan] = useState(false);
   const communitySupportHref = process.env.NEXT_PUBLIC_COMMUNITY_SUPPORT_URL || "";
@@ -98,8 +99,10 @@ export default function FeedingPage() {
   const [editingLog, setEditingLog] = useState<LogEntry | null>(null);
   const [editForm, setEditForm] = useState<FormState>(initialForm);
   const [editing, setEditing] = useState(false);
+  const [editError, setEditError] = useState("");
   const [deletingLog, setDeletingLog] = useState<LogEntry | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   const [batchFilter, setBatchFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -215,7 +218,7 @@ export default function FeedingPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    setError("");
+    setEntryError("");
     setSuccess(false);
 
     try {
@@ -234,7 +237,7 @@ export default function FeedingPage() {
       setCreateCustomFeed(false);
       setForm((f) => ({ ...f, feedGiven: "", mortality: "", ph: "", ammonia: "", temperature: "", observations: "", waterChangePct: "" }));
     } catch (err: any) {
-      setError(err?.message || "Failed to save log entry");
+      setEntryError(err?.message || "Failed to save log entry");
     } finally {
       setSaving(false);
     }
@@ -244,6 +247,7 @@ export default function FeedingPage() {
     setEditingLog(log);
     setEditForm(fromLog(log));
     setEditCustomFeed(false);
+    setEditError("");
     setError("");
   }
 
@@ -252,7 +256,7 @@ export default function FeedingPage() {
     if (!editingLog) return;
 
     setEditing(true);
-    setError("");
+    setEditError("");
 
     try {
       const res = await fetch(`/api/logs/${editingLog._id}`, {
@@ -266,7 +270,7 @@ export default function FeedingPage() {
       await loadData();
       setEditingLog(null);
     } catch (err: any) {
-      setError(err?.message || "Failed to update log");
+      setEditError(err?.message || "Failed to update log");
     } finally {
       setEditing(false);
     }
@@ -275,7 +279,7 @@ export default function FeedingPage() {
   async function confirmDelete() {
     if (!deletingLog) return;
     setDeleting(true);
-    setError("");
+    setDeleteError("");
 
     try {
       const res = await fetch(`/api/logs/${deletingLog._id}`, { method: "DELETE" });
@@ -284,7 +288,7 @@ export default function FeedingPage() {
       await loadData();
       setDeletingLog(null);
     } catch (err: any) {
-      setError(err?.message || "Failed to delete log");
+      setDeleteError(err?.message || "Failed to delete log");
     } finally {
       setDeleting(false);
     }
@@ -347,7 +351,7 @@ export default function FeedingPage() {
           <h1 className="font-display text-2xl font-semibold text-pond-100">Daily Log</h1>
           <p className="text-pond-200/75 text-sm mt-1">Record today&apos;s feeding, water quality and any mortality</p>
         </div>
-        <button onClick={() => setShowEntryForm(true)} className="btn-primary">
+        <button onClick={() => { setEntryError(""); setShowEntryForm(true); }} className="btn-primary">
           <Plus className="w-4 h-4" /> Today&apos;s Entry
         </button>
       </div>
@@ -514,10 +518,15 @@ export default function FeedingPage() {
           <div className="glass-card w-full max-w-2xl max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-display text-lg text-pond-100">Today&apos;s Entry</h2>
-              <button onClick={() => setShowEntryForm(false)} className="text-pond-200/75 hover:text-pond-300">
+              <button onClick={() => { setShowEntryForm(false); setEntryError(""); }} className="text-pond-200/75 hover:text-pond-300">
                 <X className="w-5 h-5" />
               </button>
             </div>
+            {entryError && (
+              <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10 mb-4">
+                {entryError}
+              </div>
+            )}
             <form onSubmit={submit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -659,12 +668,23 @@ export default function FeedingPage() {
           <div className="glass-card w-full max-w-2xl max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-display text-lg text-pond-100">Edit Daily Log</h2>
-              <button onClick={() => setEditingLog(null)} className="text-pond-200/75 hover:text-pond-300">
+              <button
+                onClick={() => {
+                  setEditError("");
+                  setEditingLog(null);
+                }}
+                className="text-pond-200/75 hover:text-pond-300"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={saveEdit} className="space-y-4">
+              {editError ? (
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                  {editError}
+                </div>
+              ) : null}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Batch *</label>
@@ -761,7 +781,16 @@ export default function FeedingPage() {
               </div>
 
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setEditingLog(null)} className="btn-secondary flex-1">Cancel</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditError("");
+                    setEditingLog(null);
+                  }}
+                  className="btn-secondary flex-1"
+                >
+                  Cancel
+                </button>
                 <button type="submit" disabled={editing} className="btn-primary flex-1">
                   {editing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                   {editing ? "Saving…" : "Save Changes"}
@@ -777,13 +806,33 @@ export default function FeedingPage() {
           <div className="glass-card w-full max-w-md max-h-[85vh] overflow-y-auto p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-display text-lg text-pond-100">Delete Log Entry</h2>
-              <button onClick={() => setDeletingLog(null)} className="text-pond-200/75 hover:text-pond-300">
+              <button
+                onClick={() => {
+                  setDeleteError("");
+                  setDeletingLog(null);
+                }}
+                className="text-pond-200/75 hover:text-pond-300"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
+            {deleteError ? (
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                {deleteError}
+              </div>
+            ) : null}
             <p className="text-sm text-pond-200/75">Delete this entry? Batch fish count will be reconciled automatically.</p>
             <div className="flex gap-3 pt-1">
-              <button type="button" onClick={() => setDeletingLog(null)} className="btn-secondary flex-1">Cancel</button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteError("");
+                  setDeletingLog(null);
+                }}
+                className="btn-secondary flex-1"
+              >
+                Cancel
+              </button>
               <button type="button" onClick={confirmDelete} disabled={deleting} className="btn-primary flex-1 bg-red-700 hover:bg-red-600">
                 {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                 {deleting ? "Deleting..." : "Delete"}

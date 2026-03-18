@@ -39,6 +39,9 @@ type FeedPayload = {
   openingStockKg: number;
   openingStockBrand: string;
   openingStockSizeMm: number | null;
+  openingStockDate: string | null;
+  openingStockTotalCost: number;
+  openingStockSupplier: string;
   purchases: FeedPurchase[];
   products: FeedProduct[];
   lowStockProducts: FeedProduct[];
@@ -56,10 +59,17 @@ export default function FeedInventoryPage() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
+  const [openingError, setOpeningError] = useState("");
+  const [createError, setCreateError] = useState("");
+  const [editError, setEditError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
   const [data, setData] = useState<FeedPayload>({
     openingStockKg: 0,
     openingStockBrand: "",
     openingStockSizeMm: null,
+    openingStockDate: null,
+    openingStockTotalCost: 0,
+    openingStockSupplier: "",
     purchases: [],
     products: [],
     lowStockProducts: [],
@@ -73,6 +83,9 @@ export default function FeedInventoryPage() {
   const [openingStockEdit, setOpeningStockEdit] = useState("0");
   const [openingBrandEdit, setOpeningBrandEdit] = useState("");
   const [openingSizeEdit, setOpeningSizeEdit] = useState("");
+  const [openingDateEdit, setOpeningDateEdit] = useState(new Date().toISOString().split("T")[0]);
+  const [openingCostEdit, setOpeningCostEdit] = useState("");
+  const [openingSupplierEdit, setOpeningSupplierEdit] = useState("");
 
   const [form, setForm] = useState({
     date: new Date().toISOString().split("T")[0],
@@ -96,6 +109,9 @@ export default function FeedInventoryPage() {
       setOpeningStockEdit(String(payload?.openingStockKg ?? 0));
       setOpeningBrandEdit(String(payload?.openingStockBrand ?? ""));
       setOpeningSizeEdit(payload?.openingStockSizeMm != null ? String(payload.openingStockSizeMm) : "");
+      setOpeningDateEdit(payload?.openingStockDate ? new Date(payload.openingStockDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]);
+      setOpeningCostEdit(payload?.openingStockTotalCost ? String(payload.openingStockTotalCost) : "");
+      setOpeningSupplierEdit(String(payload?.openingStockSupplier ?? ""));
     } catch (err: any) {
       setError(err?.message || "Unable to load feed inventory");
     } finally {
@@ -132,7 +148,7 @@ export default function FeedInventoryPage() {
 
   async function saveOpeningStock() {
     setSaving(true);
-    setError("");
+    setOpeningError("");
     try {
       const res = await fetch("/api/feed-inventory", {
         method: "PATCH",
@@ -141,13 +157,16 @@ export default function FeedInventoryPage() {
           openingStockKg: Number(openingStockEdit || 0),
           openingStockBrand: openingBrandEdit,
           openingStockSizeMm: openingSizeEdit === "" ? null : Number(openingSizeEdit),
+          openingStockDate: openingDateEdit,
+          openingStockTotalCost: Number(openingCostEdit || 0),
+          openingStockSupplier: openingSupplierEdit,
         }),
       });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload?.error || "Failed to update opening stock");
       await loadData();
     } catch (err: any) {
-      setError(err?.message || "Failed to update opening stock");
+      setOpeningError(err?.message || "Failed to update opening stock");
     } finally {
       setSaving(false);
     }
@@ -156,7 +175,7 @@ export default function FeedInventoryPage() {
   async function createPurchase(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    setError("");
+    setCreateError("");
     try {
       const res = await fetch("/api/feed-inventory", {
         method: "POST",
@@ -175,7 +194,7 @@ export default function FeedInventoryPage() {
       resetForm();
       await loadData();
     } catch (err: any) {
-      setError(err?.message || "Failed to create purchase");
+      setCreateError(err?.message || "Failed to create purchase");
     } finally {
       setSaving(false);
     }
@@ -183,6 +202,7 @@ export default function FeedInventoryPage() {
 
   function openEdit(entry: FeedPurchase) {
     setEditEntry(entry);
+    setEditError("");
     setForm({
       date: new Date(entry.date).toISOString().split("T")[0],
       brand: entry.brand || "",
@@ -199,7 +219,7 @@ export default function FeedInventoryPage() {
     e.preventDefault();
     if (!editEntry?._id) return;
     setEditing(true);
-    setError("");
+    setEditError("");
     try {
       const res = await fetch(`/api/feed-inventory/entries/${editEntry._id}`, {
         method: "PATCH",
@@ -218,7 +238,7 @@ export default function FeedInventoryPage() {
       resetForm();
       await loadData();
     } catch (err: any) {
-      setError(err?.message || "Failed to update purchase");
+      setEditError(err?.message || "Failed to update purchase");
     } finally {
       setEditing(false);
     }
@@ -227,7 +247,7 @@ export default function FeedInventoryPage() {
   async function confirmDelete() {
     if (!deleteEntry?._id) return;
     setEditing(true);
-    setError("");
+    setDeleteError("");
     try {
       const res = await fetch(`/api/feed-inventory/entries/${deleteEntry._id}`, { method: "DELETE" });
       const payload = await res.json();
@@ -235,7 +255,7 @@ export default function FeedInventoryPage() {
       setDeleteEntry(null);
       await loadData();
     } catch (err: any) {
-      setError(err?.message || "Failed to delete purchase");
+      setDeleteError(err?.message || "Failed to delete purchase");
     } finally {
       setEditing(false);
     }
@@ -250,6 +270,10 @@ export default function FeedInventoryPage() {
   }
 
   const lowStock = data.lowStockProducts.length > 0;
+  const hasOpeningStock = Number(data.openingStockKg || 0) > 0;
+  const openingStockLabel = data.openingStockBrand
+    ? `${data.openingStockBrand}${data.openingStockSizeMm != null ? ` ${data.openingStockSizeMm}mm` : ""}`
+    : "Opening stock";
   const formatForecastHorizon = (days: number | null) => {
     if (days == null) return "—";
     if (days < 14) return `${days.toFixed(1)} days`;
@@ -264,7 +288,7 @@ export default function FeedInventoryPage() {
           <h1 className="font-display text-2xl font-semibold text-pond-100">Feed Inventory</h1>
           <p className="text-pond-200/75 text-sm mt-1">Track initial stock, purchases, and auto-calculate balance from feed usage logs</p>
         </div>
-        <button className="btn-primary" onClick={() => { resetForm(); setShowCreate(true); }}>
+        <button className="btn-primary" onClick={() => { resetForm(); setCreateError(""); setShowCreate(true); }}>
           <Plus className="w-4 h-4" /> Add Purchase
         </button>
       </div>
@@ -292,12 +316,49 @@ export default function FeedInventoryPage() {
         </div>
       </div>
 
+      {hasOpeningStock ? (
+        <div className="glass-card p-4">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="section-title !text-base">Opening Stock</h2>
+              <p className="text-xs text-pond-200/70 mt-1">Initial stock carried into the system before purchase logging began.</p>
+            </div>
+            <span className="badge badge-water">{data.openingStockKg.toFixed(2)}kg on hand</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4 text-xs">
+            <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+              <p className="text-pond-200/65 uppercase tracking-wider">Product</p>
+              <p className="text-pond-100 mt-1">{openingStockLabel}</p>
+            </div>
+            <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+              <p className="text-pond-200/65 uppercase tracking-wider">Value</p>
+              <p className="font-mono text-pond-100 mt-1">
+                {data.openingStockTotalCost > 0 ? formatNaira(data.openingStockTotalCost) : "Not set"}
+              </p>
+            </div>
+            <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+              <p className="text-pond-200/65 uppercase tracking-wider">Supplier</p>
+              <p className="text-pond-100 mt-1">{data.openingStockSupplier || "Not set"}</p>
+            </div>
+            <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+              <p className="text-pond-200/65 uppercase tracking-wider">Acquired</p>
+              <p className="font-mono text-pond-100 mt-1">
+                {data.openingStockDate
+                  ? new Date(data.openingStockDate).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })
+                  : "Not set"}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="glass-card p-4 space-y-3">
         <h2 className="section-title !text-base">Stock Settings</h2>
         <p className="text-xs text-pond-200/70">
-          Assign opening stock to the exact feed product so later usage is deducted from the correct pellet size.
+          Assign opening stock to the exact feed product and record what that stock cost, so later usage is deducted from the correct pellet size without losing its value.
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {openingError && <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10">{openingError}</div>}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <div>
             <label className="block text-xs text-pond-300 mb-1.5 font-medium">Initial Stock (kg)</label>
             <input className="field" type="number" min={0} step="0.1" value={openingStockEdit} onChange={(e) => setOpeningStockEdit(e.target.value)} />
@@ -310,7 +371,31 @@ export default function FeedInventoryPage() {
             <label className="block text-xs text-pond-300 mb-1.5 font-medium">Pellet Size (mm)</label>
             <input className="field" type="number" min={0.1} step="0.1" placeholder="2" value={openingSizeEdit} onChange={(e) => setOpeningSizeEdit(e.target.value)} />
           </div>
+          <div>
+            <label className="block text-xs text-pond-300 mb-1.5 font-medium">Acquired Date</label>
+            <div className="date-field-wrap">
+              <span className="date-field-badge" />
+              <CalendarDays className="date-field-icon h-5 w-5 text-pond-200/80" strokeWidth={2.25} />
+              <input className="field" type="date" value={openingDateEdit} onChange={(e) => setOpeningDateEdit(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-pond-300 mb-1.5 font-medium">Opening Stock Value (₦)</label>
+            <input className="field" type="number" min={0} placeholder="18500" value={openingCostEdit} onChange={(e) => setOpeningCostEdit(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs text-pond-300 mb-1.5 font-medium">Opening Supplier</label>
+            <input className="field" placeholder="Chi Farms" value={openingSupplierEdit} onChange={(e) => setOpeningSupplierEdit(e.target.value)} />
+          </div>
         </div>
+        {Number(data.openingStockKg || 0) > 0 ? (
+          <p className="text-xs text-pond-200/65">
+            Opening stock on hand: <span className="font-mono text-pond-200">{data.openingStockKg.toFixed(2)}kg</span>
+            {data.openingStockTotalCost > 0 ? <> valued at <span className="font-mono text-pond-200">{formatNaira(data.openingStockTotalCost)}</span></> : null}
+            {data.openingStockSupplier ? <> from <span className="text-pond-100">{data.openingStockSupplier}</span></> : null}
+            {data.openingStockDate ? <> on <span className="font-mono text-pond-200">{new Date(data.openingStockDate).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}</span></> : null}.
+          </p>
+        ) : null}
         <div className="flex justify-end">
           <button className="btn-secondary self-end" onClick={saveOpeningStock} disabled={saving}>
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Initial Stock"}
@@ -380,7 +465,9 @@ export default function FeedInventoryPage() {
         {visiblePurchases.length === 0 ? (
           <div className="p-12 text-center">
             <Wheat className="w-10 h-10 text-pond-500 mx-auto mb-3 opacity-40" />
-            <p className="text-pond-200/65 text-sm">No purchases recorded yet</p>
+            <p className="text-pond-200/65 text-sm">
+              No purchases recorded yet{data.openingStockKg > 0 ? ", but opening stock is already on hand." : ""}
+            </p>
           </div>
         ) : (
           <>
@@ -466,10 +553,11 @@ export default function FeedInventoryPage() {
           <div className="glass-card w-full max-w-xl max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-display text-lg text-pond-100">Add Feed Purchase</h2>
-              <button onClick={() => setShowCreate(false)} className="text-pond-200/75 hover:text-pond-300">
+              <button onClick={() => { setShowCreate(false); setCreateError(""); }} className="text-pond-200/75 hover:text-pond-300">
                 <X className="w-5 h-5" />
               </button>
             </div>
+            {createError && <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10 mb-4">{createError}</div>}
             <form onSubmit={createPurchase} className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -512,7 +600,7 @@ export default function FeedInventoryPage() {
                 <textarea className="field resize-none" rows={2} placeholder="Juvenile feed for Batch A" value={form.notes} onChange={(e) => update("notes", e.target.value)} />
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary flex-1">Cancel</button>
+                <button type="button" onClick={() => { setShowCreate(false); setCreateError(""); }} className="btn-secondary flex-1">Cancel</button>
                 <button type="submit" disabled={saving} className="btn-primary flex-1">
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                   {saving ? "Saving..." : "Save Purchase"}
@@ -528,10 +616,11 @@ export default function FeedInventoryPage() {
           <div className="glass-card w-full max-w-xl max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-display text-lg text-pond-100">Edit Feed Purchase</h2>
-              <button onClick={() => setEditEntry(null)} className="text-pond-200/75 hover:text-pond-300">
+              <button onClick={() => { setEditEntry(null); setEditError(""); }} className="text-pond-200/75 hover:text-pond-300">
                 <X className="w-5 h-5" />
               </button>
             </div>
+            {editError && <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10 mb-4">{editError}</div>}
             <form onSubmit={saveEdit} className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -574,7 +663,7 @@ export default function FeedInventoryPage() {
                 <textarea className="field resize-none" rows={2} placeholder="Juvenile feed for Batch A" value={form.notes} onChange={(e) => update("notes", e.target.value)} />
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setEditEntry(null)} className="btn-secondary flex-1">Cancel</button>
+                <button type="button" onClick={() => { setEditEntry(null); setEditError(""); }} className="btn-secondary flex-1">Cancel</button>
                 <button type="submit" disabled={editing} className="btn-primary flex-1">
                   {editing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pencil className="w-4 h-4" />}
                   {editing ? "Saving..." : "Save Changes"}
@@ -590,15 +679,16 @@ export default function FeedInventoryPage() {
           <div className="glass-card w-full max-w-md max-h-[85vh] overflow-y-auto p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-display text-lg text-pond-100">Delete Feed Purchase</h2>
-              <button onClick={() => setDeleteEntry(null)} className="text-pond-200/75 hover:text-pond-300">
+              <button onClick={() => { setDeleteEntry(null); setDeleteError(""); }} className="text-pond-200/75 hover:text-pond-300">
                 <X className="w-5 h-5" />
               </button>
             </div>
+            {deleteError && <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10">{deleteError}</div>}
             <p className="text-sm text-pond-200/75">
               Delete purchase for <span className="font-semibold text-pond-200">{deleteEntry.brand}</span>?
             </p>
             <div className="flex gap-3 pt-1">
-              <button type="button" onClick={() => setDeleteEntry(null)} className="btn-secondary flex-1">Cancel</button>
+              <button type="button" onClick={() => { setDeleteEntry(null); setDeleteError(""); }} className="btn-secondary flex-1">Cancel</button>
               <button type="button" onClick={confirmDelete} disabled={editing} className="btn-primary flex-1 bg-red-700 hover:bg-red-600">
                 {editing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Delete
               </button>

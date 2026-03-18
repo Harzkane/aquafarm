@@ -8,13 +8,7 @@ import { Financial } from "@/models/Financial";
 import { FeedInventory } from "@/models/FeedInventory";
 import { User } from "@/models/User";
 import { getPlanConfig } from "@/lib/plans";
-
-function getRangeStart(range: string) {
-  const now = Date.now();
-  if (range === "30d") return new Date(now - 30 * 24 * 60 * 60 * 1000);
-  if (range === "90d") return new Date(now - 90 * 24 * 60 * 60 * 1000);
-  return null;
-}
+import { buildReportBuckets, getReportRangeStart } from "@/lib/reports";
 
 function csvCell(value: unknown) {
   const text = String(value ?? "");
@@ -52,7 +46,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const start = getRangeStart(range);
+  const start = getReportRangeStart(range);
   const [batches, logs, financials, feedInventory] = await Promise.all([
     Batch.find({
       userId,
@@ -97,36 +91,26 @@ export async function GET(req: NextRequest) {
     return (Number.isFinite(ph) && (ph < 6.5 || ph > 8)) || (Number.isFinite(ammo) && ammo >= 0.5);
   }).length;
 
-  const monthlyMap: Record<string, { month: string; revenue: number; expense: number; mortality: number; feed: number }> = {};
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date();
-    d.setMonth(d.getMonth() - i, 1);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    monthlyMap[key] = {
-      month: d.toLocaleDateString("en-NG", { month: "short" }),
-      revenue: 0,
-      expense: 0,
-      mortality: 0,
-      feed: 0,
-    };
-  }
-
+  const { granularity, buckets } = buildReportBuckets(range, new Date(), logs, expenses, revenue);
   for (const e of expenses) {
     const d = new Date(e.date);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    if (monthlyMap[key]) monthlyMap[key].expense += Number(e.amount || 0);
+    if (Number.isNaN(d.getTime())) continue;
+    const bucket = buckets.find((item) => d >= item.start && d <= item.end);
+    if (bucket) bucket.expense += Number(e.amount || 0);
   }
   for (const r of revenue) {
     const d = new Date(r.date);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    if (monthlyMap[key]) monthlyMap[key].revenue += Number(r.totalAmount || 0);
+    if (Number.isNaN(d.getTime())) continue;
+    const bucket = buckets.find((item) => d >= item.start && d <= item.end);
+    if (bucket) bucket.revenue += Number(r.totalAmount || 0);
   }
   for (const l of logs) {
     const d = new Date(l.date);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    if (monthlyMap[key]) {
-      monthlyMap[key].mortality += Number(l.mortality || 0);
-      monthlyMap[key].feed += Number(l.feedGiven || 0);
+    if (Number.isNaN(d.getTime())) continue;
+    const bucket = buckets.find((item) => d >= item.start && d <= item.end);
+    if (bucket) {
+      bucket.mortality += Number(l.mortality || 0);
+      bucket.feed += Number(l.feedGiven || 0);
     }
   }
 
@@ -139,7 +123,7 @@ export async function GET(req: NextRequest) {
     ["Feed Used (kg)", safeNumber(totalFeedKg)],
     ["Mortality", safeNumber(totalMortality, 0)],
     ["Fish Alive", safeNumber(fishAlive, 0)],
-    ["Survival Rate (%)", safeNumber(survivalRate)],
+    ["Current Survival Snapshot (%)", safeNumber(survivalRate)],
     ["Average pH", avgPh == null ? "" : safeNumber(avgPh)],
     ["Average Ammonia", avgAmmonia == null ? "" : safeNumber(avgAmmonia)],
     ["Average Temp (C)", avgTemp == null ? "" : safeNumber(avgTemp)],
@@ -152,13 +136,14 @@ export async function GET(req: NextRequest) {
   ];
 
   const monthlyRows = [
-    ["Month", "Revenue", "Expense", "Mortality", "Feed"],
-    ...Object.values(monthlyMap).map((m) => [
-      m.month,
-      safeNumber(m.revenue),
-      safeNumber(m.expense),
-      safeNumber(m.mortality, 0),
-      safeNumber(m.feed),
+    ["Period", "Revenue", "Expense", "Mortality", "Feed", "Granularity"],
+    ...buckets.map((bucket) => [
+      bucket.label,
+      safeNumber(bucket.revenue),
+      safeNumber(bucket.expense),
+      safeNumber(bucket.mortality, 0),
+      safeNumber(bucket.feed),
+      granularity,
     ]),
   ];
 

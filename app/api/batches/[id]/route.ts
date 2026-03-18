@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Batch } from "@/models/Batch";
+import { DailyLog } from "@/models/DailyLog";
+import { Financial } from "@/models/Financial";
 import { Types } from "mongoose";
 import { User } from "@/models/User";
 import { getPlanConfig } from "@/lib/plans";
@@ -114,6 +116,24 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!existing) return NextResponse.json({ error: "Batch not found" }, { status: 404 });
 
   const update = validated.value;
+  if (typeof update.initialCount === "number") {
+    const hasAdjustedFishCount = Number(existing.currentCount || 0) !== Number(existing.initialCount || 0);
+    const [hasLogs, hasRevenue] = await Promise.all([
+      DailyLog.exists({ userId, batchId: existing._id }),
+      Financial.exists({ userId, "revenue.batchId": existing._id }),
+    ]);
+
+    if (hasAdjustedFishCount || hasLogs || hasRevenue) {
+      return NextResponse.json(
+        {
+          error:
+            "Initial fish count can only be edited before logs, mortality, or harvest activity exist for this batch. Use Reopen Batch to repair current fish totals instead.",
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   // Keep currentCount in sync if initial count is being edited before any mortality/growth adjustments.
   if (
     typeof update.initialCount === "number" &&
@@ -184,6 +204,36 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 
   await connectDB();
   const userId = (session.user as any).id;
+  const existing = await Batch.findOne({
+    _id: params.id,
+    userId,
+    $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
+  });
+
+  if (!existing) return NextResponse.json({ error: "Batch not found" }, { status: 404 });
+
+  const hasLiveFish =
+    Math.max(0, Math.trunc(Number(existing.currentCount || 0))) > 0 ||
+    (Array.isArray(existing.tankAllocations) && existing.tankAllocations.some((allocation: any) => Number(allocation?.fishCount || 0) > 0));
+
+  const [hasLogs, hasFinancialLinks] = await Promise.all([
+    DailyLog.exists({ userId, batchId: existing._id }),
+    Financial.exists({
+      userId,
+      $or: [{ "revenue.batchId": existing._id }, { "expenses.batchId": existing._id }],
+    }),
+  ]);
+
+  if (hasLiveFish || hasLogs || hasFinancialLinks) {
+    return NextResponse.json(
+      {
+        error:
+          "Batches with live fish or recorded feed, mortality, expense, or harvest activity cannot be deleted. Harvest or reopen the batch instead so your reports stay consistent.",
+      },
+      { status: 409 },
+    );
+  }
+
   const deleted = await Batch.findOneAndUpdate(
     {
       _id: params.id,
@@ -194,7 +244,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     { new: true }
   );
 
-  if (!deleted) return NextResponse.json({ error: "Batch not found" }, { status: 404 });
   await recordAuditEvent({
     sessionUser: session.user,
     action: "delete",
