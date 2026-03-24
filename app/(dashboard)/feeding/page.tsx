@@ -5,13 +5,14 @@ import { formatFeedLabel, getFeedIdentity } from "@/lib/feed-inventory";
 
 const CAUSES = ["Unknown", "Poor water quality", "Disease", "Cannibalism", "Handling stress", "Old age / natural"];
 
-type Batch = { _id: string; name: string };
+type Batch = { _id: string; name: string; tankAllocations?: Array<{ tankId?: string; tankName?: string }> };
 type TankOption = { _id: string; name: string };
 type LogEntry = {
   _id: string;
   batchId: { _id: string; name?: string } | string;
   date: string;
   feedSession?: "morning" | "evening";
+  tankId?: string;
   tankName?: string;
   feedGiven?: number;
   feedType?: string;
@@ -175,6 +176,7 @@ export default function FeedingPage() {
     });
     return {
       ...values,
+      tankId: tankOptions.find((tank) => tank.name === values.tankName)?._id || "",
       feedType: formatFeedLabel(feedIdentity.brand, feedIdentity.pelletSizeMm),
       feedBrand: feedIdentity.brand,
       feedSizeMm: feedIdentity.pelletSizeMm,
@@ -319,6 +321,42 @@ export default function FeedingPage() {
     });
     return Array.from(names);
   }, [tankOptions, logs]);
+  const availableTankNames = useMemo(() => {
+    const selectedBatch = batches.find((batch) => batch._id === form.batchId);
+    if (!selectedBatch) return tankNames;
+    const names = new Set<string>(["All Tanks"]);
+    (selectedBatch.tankAllocations || []).forEach((allocation) => {
+      const allocationName = (allocation?.tankName || "").trim();
+      if (allocationName) names.add(allocationName);
+      const matchedTank = tankOptions.find((tank) => tank._id === allocation?.tankId);
+      if (matchedTank?.name?.trim()) names.add(matchedTank.name.trim());
+    });
+    return Array.from(names);
+  }, [batches, form.batchId, tankNames, tankOptions]);
+  const availableEditTankNames = useMemo(() => {
+    const selectedBatch = batches.find((batch) => batch._id === editForm.batchId);
+    if (!selectedBatch) return tankNames;
+    const names = new Set<string>(["All Tanks"]);
+    (selectedBatch.tankAllocations || []).forEach((allocation) => {
+      const allocationName = (allocation?.tankName || "").trim();
+      if (allocationName) names.add(allocationName);
+      const matchedTank = tankOptions.find((tank) => tank._id === allocation?.tankId);
+      if (matchedTank?.name?.trim()) names.add(matchedTank.name.trim());
+    });
+    return Array.from(names);
+  }, [batches, editForm.batchId, tankNames, tankOptions]);
+
+  useEffect(() => {
+    if (!availableTankNames.includes(form.tankName)) {
+      setForm((f) => ({ ...f, tankName: "All Tanks" }));
+    }
+  }, [availableTankNames, form.tankName]);
+
+  useEffect(() => {
+    if (!availableEditTankNames.includes(editForm.tankName)) {
+      setEditForm((f) => ({ ...f, tankName: "All Tanks" }));
+    }
+  }, [availableEditTankNames, editForm.tankName]);
 
   useEffect(() => {
     setPage(1);
@@ -541,7 +579,7 @@ export default function FeedingPage() {
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Tank</label>
                   <select className="field" value={form.tankName} onChange={(e) => update("tankName", e.target.value)}>
-                    {tankNames.map((t) => <option key={t}>{t}</option>)}
+                    {availableTankNames.map((t) => <option key={t}>{t}</option>)}
                   </select>
                 </div>
               </div>
@@ -696,7 +734,7 @@ export default function FeedingPage() {
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Tank</label>
                   <select className="field" value={editForm.tankName} onChange={(e) => updateEdit("tankName", e.target.value)}>
-                    {tankNames.map((t) => <option key={t}>{t}</option>)}
+                    {availableEditTankNames.map((t) => <option key={t}>{t}</option>)}
                   </select>
                 </div>
               </div>

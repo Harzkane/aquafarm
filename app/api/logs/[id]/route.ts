@@ -9,6 +9,20 @@ import { recordAuditEvent } from "@/lib/audit";
 import { runAtomic } from "@/lib/transactions";
 import { formatFeedLabel, getFeedIdentity } from "@/lib/feed-inventory";
 import { removeFishFromBatchAllocations } from "@/lib/tank-allocations";
+import { Tank } from "@/models/Tank";
+
+function normalizeTankName(value: unknown) {
+  return String(value || "").trim();
+}
+
+function batchHasTank(batch: any, tankId: string, tankName: string) {
+  const normalizedName = normalizeTankName(tankName).toLowerCase();
+  return Array.isArray(batch?.tankAllocations) && batch.tankAllocations.some((allocation: any) => {
+    const allocationTankId = String(allocation?.tankId || "");
+    const allocationTankName = normalizeTankName(allocation?.tankName).toLowerCase();
+    return (tankId && allocationTankId === tankId) || (normalizedName && allocationTankName === normalizedName);
+  });
+}
 
 type LogPatchBody = {
   batchId?: string;
@@ -165,6 +179,33 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   await connectDB();
   const userId = (session.user as any).id;
   const update = validated.value;
+  if (update.tankId || update.tankName) {
+    const requestedTankId =
+      typeof update.tankId === "string" && Types.ObjectId.isValid(update.tankId) ? update.tankId : "";
+    const requestedTankName = String(update.tankName || "").trim();
+
+    if (requestedTankId) {
+      const selectedTank = await Tank.findOne({ _id: requestedTankId, userId }).select("_id name").lean<any>();
+      if (!selectedTank) return NextResponse.json({ error: "Selected tank not found" }, { status: 404 });
+      update.tankId = String(selectedTank._id);
+      update.tankName = selectedTank.name;
+    } else if (requestedTankName && requestedTankName.toLowerCase() !== "all tanks") {
+      const selectedTank = await Tank.findOne({ userId, name: requestedTankName }).select("_id name").lean<any>();
+      if (selectedTank) {
+        update.tankId = String(selectedTank._id);
+        update.tankName = selectedTank.name;
+      } else {
+        update.tankId = "";
+        update.tankName = requestedTankName;
+      }
+    } else {
+      update.tankId = "";
+      update.tankName = requestedTankName;
+    }
+  }
+  const targetBatchId = typeof update.batchId === "string" ? update.batchId : "";
+  const targetTankId = typeof update.tankId === "string" ? update.tankId : "";
+  const targetTankName = normalizeTankName(update.tankName);
   const updatedLog = await runAtomic(async (txSession) => {
     const existing = await DailyLog.findOne({ _id: params.id, userId }).session(txSession || null);
     if (!existing) return null;
@@ -184,6 +225,22 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       if (String(targetBatch.status || "") === "harvested") throw new Error("TARGET_BATCH_HARVESTED");
     }
 
+    const batchForTankValidation = await Batch.findOne({
+      _id: newBatchId,
+      userId,
+      $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }],
+    }).session(txSession || null);
+    if (!batchForTankValidation) throw new Error("TARGET_BATCH_NOT_FOUND");
+    const effectiveTankId = targetBatchId || targetTankId ? String(update.tankId || "") : String(existing.tankId || "");
+    const effectiveTankName = targetBatchId || targetTankName ? normalizeTankName(update.tankName) : normalizeTankName(existing.tankName);
+    if (
+      effectiveTankName &&
+      effectiveTankName.toLowerCase() !== "all tanks" &&
+      !batchHasTank(batchForTankValidation, effectiveTankId, effectiveTankName)
+    ) {
+      throw new Error("TANK_NOT_ALLOCATED_TO_BATCH");
+    }
+
     Object.assign(existing, update);
     await existing.save({ session: txSession || undefined });
 
@@ -197,6 +254,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }).catch((error: any) => {
     if (String(error?.message || "") === "TARGET_BATCH_NOT_FOUND") return "TARGET_BATCH_NOT_FOUND" as const;
     if (String(error?.message || "") === "TARGET_BATCH_HARVESTED") return "TARGET_BATCH_HARVESTED" as const;
+    if (String(error?.message || "") === "TANK_NOT_ALLOCATED_TO_BATCH") return "TANK_NOT_ALLOCATED_TO_BATCH" as const;
     throw error;
   });
 
@@ -206,6 +264,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
   if (updatedLog === "TARGET_BATCH_HARVESTED") {
     return NextResponse.json({ error: "Daily logs cannot be reassigned to a harvested batch" }, { status: 409 });
+  }
+  if (updatedLog === "TANK_NOT_ALLOCATED_TO_BATCH") {
+    return NextResponse.json({ error: "Selected tank is not currently allocated to that batch" }, { status: 409 });
   }
 
   const batch = await Batch.findById(updatedLog.batchId).select("name").lean<any>();
@@ -219,6 +280,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       batchId: String(updatedLog.batchId || ""),
       batchName: batch?.name || "",
       feedSession: updatedLog.feedSession || "morning",
+      tankId: String(updatedLog.tankId || ""),
+      tankName: updatedLog.tankName || "",
       feedGiven: Number(updatedLog.feedGiven || 0),
       feedBrand: updatedLog.feedBrand || "",
       feedSizeMm: updatedLog.feedSizeMm ?? null,

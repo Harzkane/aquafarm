@@ -11,6 +11,7 @@ import { recordAuditEvent } from "@/lib/audit";
 import { runAtomic } from "@/lib/transactions";
 import { validateLogPayload } from "@/lib/validators/logs";
 import { removeFishFromBatchAllocations } from "@/lib/tank-allocations";
+import { Tank } from "@/models/Tank";
 
 function dayRange(date: Date) {
   const start = new Date(date);
@@ -18,6 +19,19 @@ function dayRange(date: Date) {
   const end = new Date(date);
   end.setHours(23, 59, 59, 999);
   return { start, end };
+}
+
+function normalizeTankName(value: unknown) {
+  return String(value || "").trim();
+}
+
+function batchHasTank(batch: any, tankId: string, tankName: string) {
+  const normalizedName = normalizeTankName(tankName).toLowerCase();
+  return Array.isArray(batch?.tankAllocations) && batch.tankAllocations.some((allocation: any) => {
+    const allocationTankId = String(allocation?.tankId || "");
+    const allocationTankName = normalizeTankName(allocation?.tankName).toLowerCase();
+    return (tankId && allocationTankId === tankId) || (normalizedName && allocationTankName === normalizedName);
+  });
 }
 
 async function applyMortalityDelta(
@@ -84,6 +98,19 @@ export async function POST(req: NextRequest) {
   await connectDB();
   const userId = (session.user as any).id;
   const payload = validated.value;
+  const normalizedTankName = normalizeTankName(payload.tankName);
+  const normalizedTankId =
+    typeof payload.tankId === "string" && Types.ObjectId.isValid(payload.tankId) ? payload.tankId : "";
+
+  let resolvedTankId = "";
+  if (normalizedTankId) {
+    const selectedTank = await Tank.findOne({ _id: normalizedTankId, userId }).select("_id name").lean<any>();
+    if (!selectedTank) return NextResponse.json({ error: "Selected tank not found" }, { status: 404 });
+    resolvedTankId = String(selectedTank._id);
+  } else if (normalizedTankName && normalizedTankName.toLowerCase() !== "all tanks") {
+    const selectedTank = await Tank.findOne({ userId, name: normalizedTankName }).select("_id name").lean<any>();
+    if (selectedTank) resolvedTankId = String(selectedTank._id);
+  }
 
   const batch = await Batch.findOne({
     _id: payload.batchId,
@@ -94,11 +121,20 @@ export async function POST(req: NextRequest) {
   if (String(batch.status || "") === "harvested") {
     return NextResponse.json({ error: "Daily logs cannot be recorded for a harvested batch" }, { status: 409 });
   }
+  if (
+    normalizedTankName &&
+    normalizedTankName.toLowerCase() !== "all tanks" &&
+    !batchHasTank(batch, resolvedTankId, normalizedTankName)
+  ) {
+    return NextResponse.json(
+      { error: `${batch.name} is not currently allocated to ${normalizedTankName}. Choose one of this batch's tanks.` },
+      { status: 409 },
+    );
+  }
 
   const logDate = new Date(payload.date || new Date().toISOString());
   const { start, end } = dayRange(logDate);
   const feedSession = payload.feedSession || "morning";
-  const normalizedTankName = String(payload.tankName || "").trim();
   const slotMatcher =
     feedSession === "morning"
       ? [{ feedSession: "morning" }, { feedSession: { $exists: false } }, { feedSession: null }]
@@ -108,8 +144,10 @@ export async function POST(req: NextRequest) {
       userId,
       batchId: payload.batchId,
       date: { $gte: start, $lte: end },
-      tankName: normalizedTankName,
-      $or: slotMatcher,
+      $or: resolvedTankId
+        ? [{ tankId: resolvedTankId }, { tankName: normalizedTankName }]
+        : [{ tankName: normalizedTankName }, { tankId: { $in: ["", null] } }],
+      $and: [{ $or: slotMatcher }],
     }).session(txSession || null);
 
     let logDoc;
@@ -118,14 +156,24 @@ export async function POST(req: NextRequest) {
       const previousMortality = Number(existing.mortality || 0);
       const nextMortality = Number(payload.mortality || 0);
       const deltaMortality = nextMortality - previousMortality;
-      Object.assign(existing, { ...payload, tankName: normalizedTankName });
+      Object.assign(existing, {
+        ...payload,
+        tankId: resolvedTankId,
+        tankName: normalizedTankName,
+      });
       existing.date = logDate;
       await existing.save({ session: txSession || undefined });
       await applyMortalityDelta(payload.batchId, userId, deltaMortality, txSession);
       logDoc = existing;
       action = "update";
     } else {
-      const created = await DailyLog.create([{ ...payload, tankName: normalizedTankName, userId, date: logDate }], {
+      const created = await DailyLog.create([{
+        ...payload,
+        tankId: resolvedTankId,
+        tankName: normalizedTankName,
+        userId,
+        date: logDate,
+      }], {
         session: txSession || undefined,
       });
       logDoc = created[0];
@@ -145,6 +193,7 @@ export async function POST(req: NextRequest) {
         batchId: batch._id.toString(),
         batchName: batch.name,
         feedSession: payload.feedSession || "morning",
+        tankId: resolvedTankId,
         tankName: normalizedTankName,
         feedGiven: Number(payload.feedGiven || 0),
         feedBrand: payload.feedBrand || "",

@@ -4,13 +4,14 @@ import { Skull, Loader2, CheckCircle, Search, X, Pencil, Trash2, AlertTriangle }
 
 const CAUSES = ["Unknown", "Poor water quality", "Disease", "Cannibalism", "Handling stress", "Old age / natural"];
 
-type Batch = { _id: string; name: string };
+type Batch = { _id: string; name: string; tankAllocations?: Array<{ tankId?: string; tankName?: string }> };
 type TankOption = { _id: string; name: string };
 type MortalityLog = {
   _id: string;
   batchId: { _id: string; name?: string } | string;
   date: string;
   feedSession?: "morning" | "evening";
+  tankId?: string;
   tankName?: string;
   mortality: number;
   mortalityCause?: string;
@@ -119,6 +120,7 @@ export default function MortalityPage() {
   function toPayload(values: FormState, date?: string) {
     return {
       ...values,
+      tankId: tankOptions.find((tank) => tank.name === values.tankName)?._id || "",
       feedGiven: parseFloat(values.feedGiven) || 0,
       mortality: parseInt(values.mortality) || 0,
       ph: values.ph === "" ? null : parseFloat(values.ph),
@@ -236,6 +238,24 @@ export default function MortalityPage() {
     });
     return Array.from(names);
   }, [tankOptions, logs]);
+  const availableEditTankNames = useMemo(() => {
+    const selectedBatch = batches.find((batch) => batch._id === editForm.batchId);
+    if (!selectedBatch) return tankNames;
+    const names = new Set<string>(["All Tanks"]);
+    (selectedBatch.tankAllocations || []).forEach((allocation) => {
+      const allocationName = (allocation?.tankName || "").trim();
+      if (allocationName) names.add(allocationName);
+      const matchedTank = tankOptions.find((tank) => tank._id === allocation?.tankId);
+      if (matchedTank?.name?.trim()) names.add(matchedTank.name.trim());
+    });
+    return Array.from(names);
+  }, [batches, editForm.batchId, tankNames, tankOptions]);
+
+  useEffect(() => {
+    if (!availableEditTankNames.includes(editForm.tankName)) {
+      setEditForm((f) => ({ ...f, tankName: "All Tanks" }));
+    }
+  }, [availableEditTankNames, editForm.tankName]);
 
   useEffect(() => {
     setPage(1);
@@ -486,7 +506,7 @@ export default function MortalityPage() {
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Tank</label>
                   <select className="field" value={editForm.tankName} onChange={(e) => setEditForm((f) => ({ ...f, tankName: e.target.value }))}>
-                    {tankNames.map((t) => <option key={t}>{t}</option>)}
+                    {availableEditTankNames.map((t) => <option key={t}>{t}</option>)}
                   </select>
                 </div>
                 <div>

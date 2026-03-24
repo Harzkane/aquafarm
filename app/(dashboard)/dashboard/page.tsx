@@ -7,6 +7,7 @@ import { Financial } from "@/models/Financial";
 import { Tank } from "@/models/Tank";
 import { FeedInventory } from "@/models/FeedInventory";
 import { CalendarEvent } from "@/models/CalendarEvent";
+import { TankMovement } from "@/models/TankMovement";
 import DashboardClient from "./DashboardClient";
 import { getBatchPhase, weeksSince } from "@/lib/utils";
 import { summarizeFeedInventory } from "@/lib/feed-inventory";
@@ -17,8 +18,9 @@ export default async function DashboardPage() {
 
   await connectDB();
 
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const [batches, tanks, financials, feedInventory, recentLogs, feedLogs, calendarEvents] = await Promise.all([
+  const [batches, tanks, financials, feedInventory, recentLogs, feedLogs, calendarEvents, recentMovements] = await Promise.all([
     Batch.find({
       userId,
       status: { $in: ["active", "partial"] },
@@ -33,6 +35,11 @@ export default async function DashboardPage() {
     }).sort({ date: 1 }).lean(),
     DailyLog.find({ userId }).select("date feedGiven feedType feedBrand feedSizeMm").lean(),
     CalendarEvent.find({ userId }).select("batchId kind milestoneWeek").lean<any[]>(),
+    TankMovement.find({ userId, date: { $gte: fourteenDaysAgo } })
+      .sort({ date: -1, createdAt: -1 })
+      .limit(12)
+      .populate("batchId", "name")
+      .lean<any[]>(),
   ]);
 
   const completedMilestones = new Set(
@@ -209,6 +216,159 @@ export default async function DashboardPage() {
     };
   });
 
+  const buildTankSnapshot = (batch: any | null) => {
+    const batchId = batch ? String(batch._id) : "";
+    const sourceLogs = (batchId
+      ? recentLogs.filter((log: any) => String(log.batchId || "") === batchId)
+      : recentLogs)
+      .filter((log: any) => new Date(log.date) >= fourteenDaysAgo);
+    const allocations = Array.isArray(batch?.tankAllocations) ? batch.tankAllocations : [];
+    const tankMap = new Map<string, {
+      tankId: string;
+      tankName: string;
+      currentFish: number;
+      feedKg14d: number;
+      mortality14d: number;
+      waterRiskLogs: number;
+      logCount: number;
+    }>();
+
+    const ensureTank = (tankId: string, tankName: string, currentFish = 0) => {
+      const key = tankId || tankName.trim().toLowerCase();
+      if (!key) return null;
+      if (!tankMap.has(key)) {
+        tankMap.set(key, {
+          tankId,
+          tankName,
+          currentFish,
+          feedKg14d: 0,
+          mortality14d: 0,
+          waterRiskLogs: 0,
+          logCount: 0,
+        });
+      }
+      const entry = tankMap.get(key)!;
+      entry.tankId = entry.tankId || tankId;
+      entry.tankName = entry.tankName || tankName;
+      entry.currentFish = Math.max(entry.currentFish, Number(currentFish || 0));
+      return entry;
+    };
+
+    if (batchId) {
+      allocations.forEach((allocation: any) => {
+        ensureTank(
+          String(allocation?.tankId || ""),
+          String(allocation?.tankName || "Unknown tank"),
+          Number(allocation?.fishCount || 0),
+        );
+      });
+    } else {
+      tanks.forEach((tank: any) => {
+        ensureTank(String(tank._id), String(tank.name || "Unnamed tank"), Number(tank.currentFish || 0));
+      });
+    }
+
+    sourceLogs.forEach((log: any) => {
+      const tankId = String(log.tankId || "");
+      const tankName = String(log.tankName || "").trim() || "All Tanks";
+      if (!tankId && tankName.toLowerCase() === "all tanks") return;
+      const currentFish = batchId
+        ? Number(
+            allocations.find((allocation: any) =>
+              (tankId && String(allocation?.tankId || "") === tankId) ||
+              String(allocation?.tankName || "").trim().toLowerCase() === tankName.toLowerCase(),
+            )?.fishCount || 0
+          )
+        : Number(
+            tanks.find((tank: any) =>
+              (tankId && String(tank._id) === tankId) ||
+              String(tank.name || "").trim().toLowerCase() === tankName.toLowerCase(),
+            )?.currentFish || 0
+          );
+      const entry = ensureTank(tankId, tankName, currentFish);
+      if (!entry) return;
+      entry.feedKg14d += Number(log.feedGiven || 0);
+      entry.mortality14d += Number(log.mortality || 0);
+      const ph = Number(log.ph);
+      const ammonia = Number(log.ammonia);
+      if ((Number.isFinite(ph) && (ph < 6.5 || ph > 8)) || (Number.isFinite(ammonia) && ammonia >= 0.5)) {
+        entry.waterRiskLogs += 1;
+      }
+      entry.logCount += 1;
+    });
+
+    return Array.from(tankMap.values())
+      .filter((item) => item.currentFish > 0 || item.feedKg14d > 0 || item.mortality14d > 0 || item.logCount > 0)
+      .sort((a, b) => b.currentFish - a.currentFish || b.feedKg14d - a.feedKg14d || a.tankName.localeCompare(b.tankName))
+      .slice(0, 6);
+  };
+
+  const movementSummaries = recentMovements.map((movement: any) => ({
+    id: String(movement._id),
+    batchId: String(movement.batchId?._id || movement.batchId || ""),
+    batchName: String(movement.batchId?.name || ""),
+    fromTankName: String(movement.fromTankName || ""),
+    toTankName: String(movement.toTankName || ""),
+    count: Number(movement.count || 0),
+    reason: String(movement.reason || "sorting"),
+    date: movement.date ? new Date(movement.date).toISOString() : new Date().toISOString(),
+  }));
+
+  const buildTankHealthTrend = (batch: any | null) => {
+    const batchId = batch ? String(batch._id) : "";
+    const scopedLogs = (batchId
+      ? recentLogs.filter((log: any) => String(log.batchId || "") === batchId)
+      : recentLogs)
+      .filter((log: any) => new Date(log.date) >= fourteenDaysAgo);
+
+    const rows: Array<{
+      date: string;
+      feed: number;
+      mortality: number;
+      riskLogs: number;
+      tanksLogged: number;
+    }> = [];
+
+    for (let i = 13; i >= 0; i--) {
+      const day = new Date();
+      day.setDate(day.getDate() - i);
+      const isoDay = day.toISOString().split("T")[0];
+      const dayLogs = scopedLogs.filter((log: any) => new Date(log.date).toISOString().split("T")[0] === isoDay);
+      const tanksLogged = new Set(
+        dayLogs
+          .map((log: any) => String(log.tankId || "").trim() || String(log.tankName || "").trim().toLowerCase())
+          .filter(Boolean),
+      ).size;
+
+      rows.push({
+        date: day.toLocaleDateString("en-NG", { month: "short", day: "numeric" }),
+        feed: dayLogs.reduce((sum: number, log: any) => sum + Number(log.feedGiven || 0), 0),
+        mortality: dayLogs.reduce((sum: number, log: any) => sum + Number(log.mortality || 0), 0),
+        riskLogs: dayLogs.filter((log: any) => {
+          const ph = Number(log.ph);
+          const ammonia = Number(log.ammonia);
+          return (Number.isFinite(ph) && (ph < 6.5 || ph > 8)) || (Number.isFinite(ammonia) && ammonia >= 0.5);
+        }).length,
+        tanksLogged,
+      });
+    }
+
+    return rows;
+  };
+
+  const tankSnapshots = {
+    all: buildTankSnapshot(null),
+    byBatch: Object.fromEntries(
+      batches.map((batch: any) => [String(batch._id), buildTankSnapshot(batch)])
+    ),
+  };
+  const tankHealthTrend = {
+    all: buildTankHealthTrend(null),
+    byBatch: Object.fromEntries(
+      batches.map((batch: any) => [String(batch._id), buildTankHealthTrend(batch)])
+    ),
+  };
+
   const props = {
     totalFish, totalInitial, totalFeedToday,
     totalMortality30d, totalExpenses, totalRevenue,
@@ -216,6 +376,9 @@ export default async function DashboardPage() {
     totalTanks: tanks.length,
     chartData,
     batchSummaries,
+    tankSnapshots,
+    tankHealthTrend,
+    recentMovements: movementSummaries,
     actions: actions.slice(0, 4),
     batches: JSON.parse(JSON.stringify(batches)),
     tanks: JSON.parse(JSON.stringify(tanks)),
