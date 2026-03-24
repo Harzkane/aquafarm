@@ -813,6 +813,15 @@ export default function FeedingPage() {
                 </div>
               </div>
 
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 text-xs text-pond-300 cursor-pointer">
+                  <input type="checkbox" checked={editForm.waterChanged} onChange={(e) => updateEdit("waterChanged", e.target.checked)} className="rounded" /> Water changed?
+                </label>
+                {editForm.waterChanged && (
+                  <input className="field w-24" type="number" placeholder="% changed" value={editForm.waterChangePct} onChange={(e) => updateEdit("waterChangePct", e.target.value)} />
+                )}
+              </div>
+
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Observations</label>
                 <textarea className="field resize-none" rows={2} value={editForm.observations} onChange={(e) => updateEdit("observations", e.target.value)} />
