@@ -81,6 +81,10 @@ interface Props {
 
 const FREE_LOCKED_ACTION_PREFIXES = ["/financials", "/harvest", "/calendar", "/playbook"];
 
+function formatKg(value: number) {
+  return Number(value || 0).toFixed(2);
+}
+
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
@@ -180,7 +184,7 @@ export default function DashboardClient({
     },
     {
       label: "Feed Today",
-      value: `${scope.totalFeedToday}kg`,
+      value: `${formatKg(scope.totalFeedToday)}kg`,
       sub: selectedBatch ? `${selectedBatch.name} only` : "across all tanks",
       icon: Droplets,
       color: "#75d7ff",
@@ -213,7 +217,7 @@ export default function DashboardClient({
     },
     {
       label: "Feed Today",
-      value: `${scope.totalFeedToday}kg`,
+      value: `${formatKg(scope.totalFeedToday)}kg`,
       sub: selectedBatch ? `${selectedBatch.name} only` : "across all tanks",
       icon: Droplets,
       color: "#75d7ff",
@@ -526,8 +530,11 @@ export default function DashboardClient({
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184,0.1)" />
               <XAxis dataKey="date" tick={{ fill: "rgba(232,245,238,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "rgba(232,245,238,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} />
+              <YAxis tick={{ fill: "rgba(232,245,238,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(value: number) => formatKg(value)} />
+              <Tooltip
+                formatter={(value: number, name: string) => [`${formatKg(value)}kg`, name]}
+                content={<CustomTooltip />}
+              />
               <Area type="monotone" dataKey="feed" name="Feed (kg)" stroke="#9ca3af" strokeWidth={2} fill="url(#feedGrad)" dot={false} />
             </AreaChart>
           </ResponsiveContainer>
