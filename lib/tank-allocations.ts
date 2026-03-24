@@ -1,5 +1,5 @@
 import { Types } from "mongoose";
-import { Tank } from "@/models/Tank";
+import { Tank } from "../models/Tank";
 
 type TankAllocationLike = {
   tankId?: string;
@@ -35,6 +35,11 @@ export function getTankAllocationCount(input: unknown, tankId: string) {
     .reduce((sum, item) => sum + Number(item.fishCount || 0), 0);
 }
 
+export function getUnassignedFishCount(batch: { currentCount?: number; tankAllocations?: unknown }) {
+  const allocatedFish = getAllocatedFishCount(batch?.tankAllocations);
+  return Math.max(0, Number(batch?.currentCount || 0) - allocatedFish);
+}
+
 export function upsertTankAllocation(
   input: unknown,
   tankId: string,
@@ -52,6 +57,37 @@ export function upsertTankAllocation(
     allocations.push({ tankId, tankName, fishCount: count, phase });
   }
   return allocations.filter((item) => Number(item.fishCount || 0) > 0);
+}
+
+export function reconcileTankAllocation(batch: any, tank: any, phase = "reconciled") {
+  const batchId = String(batch?._id || "");
+  const tankId = String(tank?._id || "");
+  if (!batchId || !tankId) return 0;
+
+  const allocations = normalizeTankAllocations(batch?.tankAllocations);
+  const existing = getTankAllocationCount(allocations, tankId);
+  if (existing > 0) return existing;
+
+  const currentFish = Math.max(0, Math.trunc(Number(tank?.currentFish || 0)));
+  if (currentFish <= 0) return 0;
+
+  const currentBatchId = String(tank?.currentBatch || "");
+  if (currentBatchId && currentBatchId !== batchId) return 0;
+
+  const allocatedFish = getAllocatedFishCount(allocations);
+  const unassignedFish = Math.max(0, Math.trunc(Number(batch?.currentCount || 0)) - allocatedFish);
+  const inferredCount = Math.min(currentFish, unassignedFish);
+  if (inferredCount <= 0) return 0;
+
+  batch.tankAllocations = upsertTankAllocation(
+    allocations,
+    tankId,
+    String(tank?.name || "").trim(),
+    inferredCount,
+    phase,
+  );
+
+  return inferredCount;
 }
 
 export function syncTankOccupancy(tank: any, batchId?: string) {
@@ -124,7 +160,7 @@ export async function removeFishFromBatchAllocations(params: {
 
   const tanks = await Tank.find({ userId, _id: { $in: tankIds } }).session(txSession || null);
   await Promise.all(
-    tanks.map(async (tank) => {
+    tanks.map(async (tank: any) => {
       const removed = Number(removedByTank.get(String(tank._id)) || 0);
       if (removed <= 0) return;
       tank.currentFish = Math.max(0, Number(tank.currentFish || 0) - removed);

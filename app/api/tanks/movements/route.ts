@@ -9,6 +9,7 @@ import { runAtomic } from "@/lib/transactions";
 import { validateMove } from "@/lib/validators/tank-movements";
 import {
   getTankAllocationCount,
+  reconcileTankAllocation,
   syncTankOccupancy,
   upsertTankAllocation,
   normalizeTankAllocations,
@@ -76,7 +77,10 @@ export async function POST(req: NextRequest) {
       .select("name")
       .session(txSession || null);
 
-    const fromAllocated = getTankAllocationCount(batch.tankAllocations, String(fromTank._id));
+    let fromAllocated = getTankAllocationCount(batch.tankAllocations, String(fromTank._id));
+    if (fromAllocated <= 0) {
+      fromAllocated = reconcileTankAllocation(batch, fromTank, "reconciled");
+    }
     if (fromAllocated < payload.count) {
       return {
         error: `${batch.name} has only ${fromAllocated.toLocaleString()} fish allocated in ${fromTank.name}.`,

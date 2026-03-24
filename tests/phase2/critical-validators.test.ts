@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { validateLogPayload } from "../../lib/validators/logs";
 import { validateMove } from "../../lib/validators/tank-movements";
 import { validateHarvestPayload } from "../../lib/validators/harvest";
+import { reconcileTankAllocation } from "../../lib/tank-allocations";
 
 const objectId = "507f1f77bcf86cd799439011";
 const objectId2 = "507f1f77bcf86cd799439012";
@@ -101,4 +102,30 @@ test("validateHarvestPayload accepts valid harvest payload", () => {
     assert.equal(result.value.channel, "market");
     assert.equal(result.value.markBatchHarvested, true);
   }
+});
+
+test("reconcileTankAllocation restores a missing allocation from tank occupancy", () => {
+  const batch: any = {
+    _id: objectId,
+    currentCount: 520,
+    tankAllocations: [],
+  };
+  const tank: any = {
+    _id: objectId2,
+    name: "3,500L Half-Tank",
+    currentFish: 520,
+    currentBatch: objectId,
+  };
+
+  const repaired = reconcileTankAllocation(batch, tank);
+
+  assert.equal(repaired, 520);
+  assert.deepEqual(batch.tankAllocations, [
+    {
+      tankId: objectId2,
+      tankName: "3,500L Half-Tank",
+      fishCount: 520,
+      phase: "reconciled",
+    },
+  ]);
 });

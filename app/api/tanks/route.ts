@@ -60,6 +60,12 @@ function validatePayload(body: any): { ok: true; value: TankPayload } | { ok: fa
   if (targetFishCapacity > 0 && currentFish > targetFishCapacity) {
     return { ok: false, error: "Current fish cannot exceed fish capacity" };
   }
+  if (currentFish > 0) {
+    return {
+      ok: false,
+      error: "Create tanks with 0 fish, then use Allocate Batch Fish to stock them.",
+    };
+  }
 
   return {
     ok: true,

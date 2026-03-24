@@ -146,6 +146,15 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
           { status: 409 }
         );
       }
+
+      if (validated.value.currentFish > 0) {
+        return NextResponse.json(
+          {
+            error: "Tank fish count must be added through Allocate Batch Fish or Move Fish so batch allocations stay accurate.",
+          },
+          { status: 409 }
+        );
+      }
     }
 
     Object.assign(tank, validated.value);
