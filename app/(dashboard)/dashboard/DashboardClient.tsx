@@ -85,6 +85,14 @@ function formatKg(value: number) {
   return Number(value || 0).toFixed(2);
 }
 
+function formatTooltipValue(item: any) {
+  const value = Number(item?.value ?? 0);
+  if (item?.dataKey === "feed" || /kg/i.test(String(item?.name || ""))) {
+    return `${formatKg(value)}kg`;
+  }
+  return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(2);
+}
+
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
@@ -92,7 +100,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
       <p className="text-pond-300 font-medium">{label}</p>
       {payload.map((p: any) => (
         <p key={p.dataKey} style={{ color: p.color }}>
-          {p.name}: <span className="font-mono font-medium">{p.value}</span>
+          {p.name}: <span className="font-mono font-medium">{formatTooltipValue(p)}</span>
         </p>
       ))}
     </div>
@@ -475,48 +483,8 @@ export default function DashboardClient({
         </div>
       </div>
 
-      {scopedTankHealthTrend.length > 0 && (
-        <div className="chart-wrap">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <div>
-              <h2 className="section-title">Tank Health Trend</h2>
-              <p className="text-xs text-pond-200/65 mt-1">Fourteen-day view of tank-level mortality and water-risk pressure for {scopeLabel}.</p>
-            </div>
-            <Link href="/water-quality" className="text-xs text-pond-300 hover:text-pond-100 transition-colors">
-              Open water logs
-            </Link>
-          </div>
-          <ResponsiveContainer width="100%" height={250}>
-            <AreaChart data={scopedTankHealthTrend}>
-              <defs>
-                <linearGradient id="tankRiskGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#f87171" stopOpacity={0.32} />
-                  <stop offset="95%" stopColor="#f87171" stopOpacity={0.02} />
-                </linearGradient>
-                <linearGradient id="tankMortGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.28} />
-                  <stop offset="95%" stopColor="#fbbf24" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184,0.1)" />
-              <XAxis dataKey="date" tick={{ fill: "rgba(232,245,238,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "rgba(232,245,238,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="riskLogs" name="Water-risk logs" stroke="#f87171" strokeWidth={2} fill="url(#tankRiskGrad)" dot={false} />
-              <Area type="monotone" dataKey="mortality" name="Deaths" stroke="#fbbf24" strokeWidth={2} fill="url(#tankMortGrad)" dot={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-          <div className="mt-3 flex items-center gap-4 text-xs text-pond-200/65 flex-wrap">
-            <span>Water-risk logs mark days with out-of-range pH or high ammonia.</span>
-            <span>
-              Peak tanks logged: {Math.max(0, ...scopedTankHealthTrend.map((row) => Number(row.tanksLogged || 0))).toLocaleString()}
-            </span>
-          </div>
-        </div>
-      )}
-
       {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="space-y-4">
         {/* Feed chart */}
         <div className="chart-wrap">
           <h2 className="section-title mb-4">Feed Given (kg) — Last 14 Days</h2>
@@ -540,18 +508,60 @@ export default function DashboardClient({
           </ResponsiveContainer>
         </div>
 
-        {/* Mortality chart */}
-        <div className="chart-wrap">
-          <h2 className="section-title mb-4">Daily Mortality — Last 14 Days</h2>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={scope.chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184,0.1)" />
-              <XAxis dataKey="date" tick={{ fill: "rgba(232,245,238,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "rgba(232,245,238,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="mortality" name="Deaths" fill="#f87171" radius={[4, 4, 0, 0]} opacity={0.8} />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className={`grid grid-cols-1 gap-4 ${scopedTankHealthTrend.length > 0 ? "lg:grid-cols-2" : ""}`}>
+          {scopedTankHealthTrend.length > 0 && (
+            <div className="chart-wrap">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="section-title">Tank Health Trend</h2>
+                  <p className="text-xs text-pond-200/65 mt-1">Fourteen-day view of tank-level mortality and water-risk pressure for {scopeLabel}.</p>
+                </div>
+                <Link href="/water-quality" className="text-xs text-pond-300 hover:text-pond-100 transition-colors">
+                  Open water logs
+                </Link>
+              </div>
+              <ResponsiveContainer width="100%" height={250}>
+                <AreaChart data={scopedTankHealthTrend}>
+                  <defs>
+                    <linearGradient id="tankRiskGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f87171" stopOpacity={0.32} />
+                      <stop offset="95%" stopColor="#f87171" stopOpacity={0.02} />
+                    </linearGradient>
+                    <linearGradient id="tankMortGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.28} />
+                      <stop offset="95%" stopColor="#fbbf24" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184,0.1)" />
+                  <XAxis dataKey="date" tick={{ fill: "rgba(232,245,238,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "rgba(232,245,238,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Area type="monotone" dataKey="riskLogs" name="Water-risk logs" stroke="#f87171" strokeWidth={2} fill="url(#tankRiskGrad)" dot={false} />
+                  <Area type="monotone" dataKey="mortality" name="Deaths" stroke="#fbbf24" strokeWidth={2} fill="url(#tankMortGrad)" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+              <div className="mt-3 flex items-center gap-4 text-xs text-pond-200/65 flex-wrap">
+                <span>Water-risk logs mark days with out-of-range pH or high ammonia.</span>
+                <span>
+                  Peak tanks logged: {Math.max(0, ...scopedTankHealthTrend.map((row) => Number(row.tanksLogged || 0))).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Mortality chart */}
+          <div className="chart-wrap">
+            <h2 className="section-title mb-4">Daily Mortality — Last 14 Days</h2>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={scope.chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184,0.1)" />
+                <XAxis dataKey="date" tick={{ fill: "rgba(232,245,238,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "rgba(232,245,238,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="mortality" name="Deaths" fill="#f87171" radius={[4, 4, 0, 0]} opacity={0.8} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </div>
 

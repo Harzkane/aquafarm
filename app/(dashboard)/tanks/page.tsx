@@ -510,6 +510,19 @@ export default function TanksPage() {
   );
   const unassignedFish = Math.max(0, totalBatchFishAlive - totalFish);
   const overTrackedFish = Math.max(0, totalFish - totalBatchFishAlive);
+  const activeBatchSummary = useMemo(() => {
+    return batches
+      .filter((batch) => batch.status === "active" || batch.status === "partial")
+      .map((batch) => `${batch.name}: ${Number(batch.currentCount || 0).toLocaleString()}`)
+      .join(" • ");
+  }, [batches]);
+  const occupiedTankSummary = useMemo(() => {
+    return tanks
+      .filter((tank) => Number(tank.currentFish || 0) > 0)
+      .sort((a, b) => Number(b.currentFish || 0) - Number(a.currentFish || 0) || a.name.localeCompare(b.name))
+      .map((tank) => `${tank.name}: ${Number(tank.currentFish || 0).toLocaleString()}`)
+      .join(" • ");
+  }, [tanks]);
   const selectedAllocateBatch = useMemo(
     () => batches.find((batch) => batch._id === allocateForm.batchId) || null,
     [allocateForm.batchId, batches],
@@ -668,9 +681,22 @@ export default function TanksPage() {
       {overTrackedFish > 0 ? (
         <div className="rounded-xl px-4 py-3 text-sm border border-red-400/30 bg-red-500/10 text-red-200 flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-          <span>
-            Tanks currently show {overTrackedFish.toLocaleString()} more fish than your active batch totals. Review tank counts and recent mortality or harvest updates.
-          </span>
+          <div className="space-y-1.5">
+            <p>
+              Tanks currently show {overTrackedFish.toLocaleString()} more fish than your active batch totals.
+              Tanks: {totalFish.toLocaleString()} fish. Active batches: {totalBatchFishAlive.toLocaleString()} fish.
+            </p>
+            {activeBatchSummary ? (
+              <p className="text-xs text-red-100/80">
+                Batches: {activeBatchSummary}
+              </p>
+            ) : null}
+            {occupiedTankSummary ? (
+              <p className="text-xs text-red-100/80">
+                Tanks: {occupiedTankSummary}
+              </p>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
