@@ -33,7 +33,7 @@ type TankHealthPoint = {
 interface Props {
   totalFish: number; totalInitial: number; totalFeedToday: number;
   totalMortality30d: number; totalExpenses: number; totalRevenue: number;
-  activeBatches: number; totalTanks: number; chartDataByRange: Record<DashboardTimeframe, ChartPoint[]>;
+  activeBatches: number; totalTanks: number; chartDataByRange: Record<string, ChartPoint[]>;
   batchSummaries: Array<{
     batchId: string;
     totalFish: number;
@@ -42,7 +42,7 @@ interface Props {
     totalMortality30d: number;
     totalExpenses: number;
     totalRevenue: number;
-    chartDataByRange: Record<DashboardTimeframe, ChartPoint[]>;
+    chartDataByRange: Record<string, ChartPoint[]>;
   }>;
   tankSnapshots: {
     all: Array<{
@@ -65,8 +65,8 @@ interface Props {
     }>>;
   };
   tankHealthTrend: {
-    all: Record<DashboardTimeframe, TankHealthPoint[]>;
-    byBatch: Record<string, Record<DashboardTimeframe, TankHealthPoint[]>>;
+    all: Record<string, TankHealthPoint[]>;
+    byBatch: Record<string, Record<string, TankHealthPoint[]>>;
   };
   recentMovements: Array<{
     id: string;

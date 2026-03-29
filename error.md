@@ -1,140 +1,46 @@
-❯ clear
-❯ npm run dev
-
-> aquafarm@0.1.0 dev
-> next dev
-
-  ▲ Next.js 14.2.5
-  - Local:        http://localhost:3000
-  - Environments: .env.local
-
- ✓ Starting...
- ✓ Ready in 32.9s
- ✓ Compiled /middleware in 331ms (172 modules)
- ○ Compiling /api/auth/[...nextauth] ...
- ✓ Compiled /api/auth/[...nextauth] in 753ms (269 modules)
- GET /api/auth/session 200 in 1303ms
- ○ Compiling /settings/ops ...
- ✓ Compiled /settings/ops in 2.6s (919 modules)
- ✓ Compiled in 550ms (345 modules)
- GET /settings/ops 200 in 3153ms
- POST /api/auth/_log 200 in 30ms
- GET /api/auth/session 200 in 54ms
- GET /api/auth/session 200 in 57ms
- POST /api/auth/_log 200 in 13ms
- ○ Compiling /manifest.webmanifest ...
- ✓ Compiled /manifest.webmanifest in 1066ms (605 modules)
- GET /manifest.webmanifest 200 in 1292ms
- ○ Compiling /api/alerts ...
- ✓ Compiled /api/auth/[...nextauth] in 2.9s (306 modules)
- ✓ Compiled (311 modules)
- GET /api/auth/session 200 in 4217ms
- GET /api/auth/session 200 in 3094ms
- GET /api/alerts?limit=5&counts=1 200 in 3936ms
- GET /api/alerts?limit=5&counts=1 200 in 5630ms
- GET /api/ops/cron-runs?limit=120 200 in 3982ms
- GET /api/ops/cron-runs?limit=120 200 in 5137ms
- GET /api/auth/session 200 in 105ms
- ○ Compiling /api/ops/cron-health ...
- ✓ Compiled /api/ops/cron-health in 2s (313 modules)
- GET /api/ops/cron-health?hours=24 200 in 2975ms
- ○ Compiling /alerts ...
- ✓ Compiled /alerts in 9.4s (952 modules)
- ⨯ MongoBulkWriteError: Updating the path 'triggerCount' would create a conflict at 'triggerCount'
-    at UnorderedBulkOperation.handleWriteError (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/bulk/common.js:804:19)
-    at UnorderedBulkOperation.handleWriteError (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/bulk/unordered.js:17:22)
-    at executeCommands (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/bulk/common.js:350:19)
-    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
-    at async /Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/bulk/common.js:790:24
-    at async MongoClient.withSession (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/mongo_client.js:477:20)
-    at async UnorderedBulkOperation.execute (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/bulk/common.js:789:20)
-    at async Collection.bulkWrite (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/collection.js:224:16)
-    at async Function.bulkWrite (/Users/harz/Downloads/aquafarm/node_modules/mongoose/lib/model.js:3512:20)
-    at async syncAlertsForUser (webpack-internal:///(rsc)/./lib/alerts.ts:455:9)
-    at async GET (webpack-internal:///(rsc)/./app/api/alerts/route.ts:39:24)
-    at async /Users/harz/Downloads/aquafarm/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:6:55038
-    at async ek.execute (/Users/harz/Downloads/aquafarm/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:6:45808)
-    at async ek.handle (/Users/harz/Downloads/aquafarm/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:6:56292)
-    at async doRender (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1377:42)
-    at async cacheEntry.responseCache.get.routeKind (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1599:28)
-    at async DevServer.renderToResponseWithComponentsImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1507:28)
-    at async DevServer.renderPageComponent (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1931:24)
-    at async DevServer.renderToResponseImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1969:32)
-    at async DevServer.pipeImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:920:25)
-    at async NextNodeServer.handleCatchallRenderRequest (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/next-server.js:272:17)
-    at async DevServer.handleRequestImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:816:17)
-    at async /Users/harz/Downloads/aquafarm/node_modules/next/dist/server/dev/next-dev-server.js:339:20
-    at async Span.traceAsyncFn (/Users/harz/Downloads/aquafarm/node_modules/next/dist/trace/trace.js:154:20)
-    at async DevServer.handleRequest (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/dev/next-dev-server.js:336:24)
-    at async invokeRender (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/lib/router-server.js:174:21)
-    at async handleRequest (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/lib/router-server.js:353:24)
-    at async requestHandlerImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/lib/router-server.js:377:13)
-    at async Server.requestListener (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/lib/start-server.js:141:13) {
-  errorLabelSet: Set(0) {},
-  errorResponse: {
-    message: "Updating the path 'triggerCount' would create a conflict at 'triggerCount'",
-    code: 40,
-    writeErrors: [ [WriteError] ]
-  },
-  code: 40,
-  writeErrors: [ WriteError { err: [Object] } ],
-  result: BulkWriteResult {
-    insertedCount: 0,
-    matchedCount: 0,
-    modifiedCount: 0,
-    deletedCount: 0,
-    upsertedCount: 0,
-    upsertedIds: {},
-    insertedIds: {}
-  }
-}
- GET /api/alerts?limit=100&counts=1&refresh=1 500 in 528ms
- ⨯ MongoBulkWriteError: Updating the path 'triggerCount' would create a conflict at 'triggerCount'
-    at UnorderedBulkOperation.handleWriteError (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/bulk/common.js:804:19)
-    at UnorderedBulkOperation.handleWriteError (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/bulk/unordered.js:17:22)
-    at executeCommands (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/bulk/common.js:350:19)
-    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
-    at async /Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/bulk/common.js:790:24
-    at async MongoClient.withSession (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/mongo_client.js:477:20)
-    at async UnorderedBulkOperation.execute (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/bulk/common.js:789:20)
-    at async Collection.bulkWrite (/Users/harz/Downloads/aquafarm/node_modules/mongodb/lib/collection.js:224:16)
-    at async Function.bulkWrite (/Users/harz/Downloads/aquafarm/node_modules/mongoose/lib/model.js:3512:20)
-    at async syncAlertsForUser (webpack-internal:///(rsc)/./lib/alerts.ts:455:9)
-    at async GET (webpack-internal:///(rsc)/./app/api/alerts/route.ts:39:24)
-    at async /Users/harz/Downloads/aquafarm/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:6:55038
-    at async ek.execute (/Users/harz/Downloads/aquafarm/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:6:45808)
-    at async ek.handle (/Users/harz/Downloads/aquafarm/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:6:56292)
-    at async doRender (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1377:42)
-    at async cacheEntry.responseCache.get.routeKind (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1599:28)
-    at async DevServer.renderToResponseWithComponentsImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1507:28)
-    at async DevServer.renderPageComponent (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1931:24)
-    at async DevServer.renderToResponseImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:1969:32)
-    at async DevServer.pipeImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:920:25)
-    at async NextNodeServer.handleCatchallRenderRequest (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/next-server.js:272:17)
-    at async DevServer.handleRequestImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/base-server.js:816:17)
-    at async /Users/harz/Downloads/aquafarm/node_modules/next/dist/server/dev/next-dev-server.js:339:20
-    at async Span.traceAsyncFn (/Users/harz/Downloads/aquafarm/node_modules/next/dist/trace/trace.js:154:20)
-    at async DevServer.handleRequest (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/dev/next-dev-server.js:336:24)
-    at async invokeRender (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/lib/router-server.js:174:21)
-    at async handleRequest (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/lib/router-server.js:353:24)
-    at async requestHandlerImpl (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/lib/router-server.js:377:13)
-    at async Server.requestListener (/Users/harz/Downloads/aquafarm/node_modules/next/dist/server/lib/start-server.js:141:13) {
-  errorLabelSet: Set(0) {},
-  errorResponse: {
-    message: "Updating the path 'triggerCount' would create a conflict at 'triggerCount'",
-    code: 40,
-    writeErrors: [ [WriteError] ]
-  },
-  code: 40,
-  writeErrors: [ WriteError { err: [Object] } ],
-  result: BulkWriteResult {
-    insertedCount: 0,
-    matchedCount: 0,
-    modifiedCount: 0,
-    deletedCount: 0,
-    upsertedCount: 0,
-    upsertedIds: {},
-    insertedIds: {}
-  }
-}
- GET /api/alerts?limit=100&counts=1&refresh=1 500 in 699ms
+17:27:31.916 Running build in Washington, D.C., USA (East) – iad1
+17:27:31.917 Build machine configuration: 2 cores, 8 GB
+17:27:32.205 Cloning github.com/Harzkane/aquafarm (Branch: main, Commit: 7f853d0)
+17:27:32.839 Cloning completed: 633.000ms
+17:27:33.399 Restored build cache from previous deployment (D18VZ2LVf9qs1oTAuENs4RT5hV94)
+17:27:33.667 Running "vercel build"
+17:27:34.571 Vercel CLI 50.37.1
+17:27:34.794 Installing dependencies...
+17:27:36.105 
+17:27:36.106 up to date in 1s
+17:27:36.107 
+17:27:36.107 156 packages are looking for funding
+17:27:36.107   run `npm fund` for details
+17:27:36.136 Detected Next.js version: 14.2.5
+17:27:36.141 Running "npm run build"
+17:27:36.243 
+17:27:36.243 > aquafarm@0.1.0 build
+17:27:36.243 > next build
+17:27:36.244 
+17:27:36.913   ▲ Next.js 14.2.5
+17:27:36.914 
+17:27:36.936    Creating an optimized production build ...
+17:27:46.574  ✓ Compiled successfully
+17:27:46.575    Linting and checking validity of types ...
+17:27:54.522 
+17:27:54.523 ./app/(dashboard)/settings/audit/page.tsx
+17:27:54.523 71:6  Warning: React Hook useEffect has missing dependencies: 'load' and 'loading'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+17:27:54.524 
+17:27:54.524 ./app/(dashboard)/settings/ops/page.tsx
+17:27:54.524 97:6  Warning: React Hook useEffect has missing dependencies: 'load' and 'loading'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+17:27:54.524 
+17:27:54.524 info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules
+17:28:02.174 Failed to compile.
+17:28:02.174 
+17:28:02.175 ./app/(dashboard)/dashboard/page.tsx:397:11
+17:28:02.175 Type error: Type '{ totalFish: any; totalInitial: any; totalFeedToday: number; totalMortality30d: number; totalExpenses: any; totalRevenue: any; activeBatches: number; totalTanks: number; chartDataByRange: { ...; }; ... 9 more ...; plan: "free" | ... 1 more ... | "commercial"; }' is not assignable to type 'Props'.
+17:28:02.175   Types of property 'chartDataByRange' are incompatible.
+17:28:02.175     Type '{ [k: string]: { date: string; feed: number; mortality: number; }[]; }' is missing the following properties from type 'Record<DashboardTimeframe, ChartPoint[]>': 7, 14, 30, 90
+17:28:02.175 
+17:28:02.175 [0m [90m 395 |[39m   }[33m;[39m[0m
+17:28:02.176 [0m [90m 396 |[39m[0m
+17:28:02.176 [0m[31m[1m>[22m[39m[90m 397 |[39m   [36mreturn[39m [33m<[39m[33mDashboardClient[39m {[33m...[39mprops} [33m/[39m[33m>[39m[33m;[39m[0m
+17:28:02.176 [0m [90m     |[39m           [31m[1m^[22m[39m[0m
+17:28:02.176 [0m [90m 398 |[39m }[0m
+17:28:02.176 [0m [90m 399 |[39m[0m
+17:28:02.239 Error: Command "npm run build" exited with 1
