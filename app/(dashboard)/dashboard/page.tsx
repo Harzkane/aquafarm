@@ -12,6 +12,60 @@ import DashboardClient from "./DashboardClient";
 import { getBatchPhase, weeksSince } from "@/lib/utils";
 import { summarizeFeedInventory } from "@/lib/feed-inventory";
 
+const DASHBOARD_TIMEFRAMES = [7, 14, 30, 90] as const;
+
+function buildRangeSeries(logs: any[], days: number) {
+  const rows: Array<{ date: string; feed: number; mortality: number }> = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split("T")[0];
+    const dayLogs = logs.filter((l: any) => new Date(l.date).toISOString().split("T")[0] === dateStr);
+    rows.push({
+      date: d.toLocaleDateString("en-NG", { month: "short", day: "numeric" }),
+      feed: dayLogs.reduce((sum: number, log: any) => sum + Number(log.feedGiven || 0), 0),
+      mortality: dayLogs.reduce((sum: number, log: any) => sum + Number(log.mortality || 0), 0),
+    });
+  }
+  return rows;
+}
+
+function buildTankHealthSeries(logs: any[], days: number) {
+  const rows: Array<{
+    date: string;
+    feed: number;
+    mortality: number;
+    riskLogs: number;
+    tanksLogged: number;
+  }> = [];
+
+  for (let i = days - 1; i >= 0; i--) {
+    const day = new Date();
+    day.setDate(day.getDate() - i);
+    const isoDay = day.toISOString().split("T")[0];
+    const dayLogs = logs.filter((log: any) => new Date(log.date).toISOString().split("T")[0] === isoDay);
+    const tanksLogged = new Set(
+      dayLogs
+        .map((log: any) => String(log.tankId || "").trim() || String(log.tankName || "").trim().toLowerCase())
+        .filter(Boolean),
+    ).size;
+
+    rows.push({
+      date: day.toLocaleDateString("en-NG", { month: "short", day: "numeric" }),
+      feed: dayLogs.reduce((sum: number, log: any) => sum + Number(log.feedGiven || 0), 0),
+      mortality: dayLogs.reduce((sum: number, log: any) => sum + Number(log.mortality || 0), 0),
+      riskLogs: dayLogs.filter((log: any) => {
+        const ph = Number(log.ph);
+        const ammonia = Number(log.ammonia);
+        return (Number.isFinite(ph) && (ph < 6.5 || ph > 8)) || (Number.isFinite(ammonia) && ammonia >= 0.5);
+      }).length,
+      tanksLogged,
+    });
+  }
+
+  return rows;
+}
+
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as any)?.id;
@@ -20,6 +74,7 @@ export default async function DashboardPage() {
 
   const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
   const [batches, tanks, financials, feedInventory, recentLogs, feedLogs, calendarEvents, recentMovements] = await Promise.all([
     Batch.find({
       userId,
@@ -31,7 +86,7 @@ export default async function DashboardPage() {
     FeedInventory.findOne({ userId }).lean<any>(),
     DailyLog.find({
       userId,
-      date: { $gte: thirtyDaysAgo },
+      date: { $gte: ninetyDaysAgo },
     }).sort({ date: 1 }).lean(),
     DailyLog.find({ userId }).select("date feedGiven feedType feedBrand feedSizeMm").lean(),
     CalendarEvent.find({ userId }).select("batchId kind milestoneWeek").lean<any[]>(),
@@ -59,7 +114,9 @@ export default async function DashboardPage() {
   const totalFeedToday = recentLogs
     .filter((l: any) => new Date(l.date).toDateString() === new Date().toDateString())
     .reduce((s: number, l: any) => s + (l.feedGiven || 0), 0);
-  const totalMortality30d = recentLogs.reduce((s: number, l: any) => s + (l.mortality || 0), 0);
+  const totalMortality30d = recentLogs
+    .filter((l: any) => new Date(l.date) >= thirtyDaysAgo)
+    .reduce((s: number, l: any) => s + (l.mortality || 0), 0);
 
   const expenses = financials?.expenses || [];
   const revenues = financials?.revenue || [];
@@ -169,38 +226,15 @@ export default async function DashboardPage() {
     });
   }
 
-  // Build chart data (last 14 days)
-  const chartData: any[] = [];
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split("T")[0];
-    const dayLogs = recentLogs.filter((l: any) => new Date(l.date).toISOString().split("T")[0] === dateStr);
-    chartData.push({
-      date: d.toLocaleDateString("en-NG", { month: "short", day: "numeric" }),
-      feed: dayLogs.reduce((s: number, l: any) => s + (l.feedGiven || 0), 0),
-      mortality: dayLogs.reduce((s: number, l: any) => s + (l.mortality || 0), 0),
-    });
-  }
+  const chartDataByRange = Object.fromEntries(
+    DASHBOARD_TIMEFRAMES.map((days) => [String(days), buildRangeSeries(recentLogs, days)])
+  );
 
   const batchSummaries = batches.map((batch: any) => {
     const batchId = String(batch._id);
     const batchLogs = recentLogs.filter((log: any) => String(log.batchId || "") === batchId);
     const batchExpenses = expenses.filter((entry: any) => String(entry.batchId || "") === batchId);
     const batchRevenue = revenues.filter((entry: any) => String(entry.batchId || "") === batchId);
-
-    const batchChartData = [];
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split("T")[0];
-      const dayLogs = batchLogs.filter((log: any) => new Date(log.date).toISOString().split("T")[0] === dateStr);
-      batchChartData.push({
-        date: d.toLocaleDateString("en-NG", { month: "short", day: "numeric" }),
-        feed: dayLogs.reduce((s: number, log: any) => s + (log.feedGiven || 0), 0),
-        mortality: dayLogs.reduce((s: number, log: any) => s + (log.mortality || 0), 0),
-      });
-    }
 
     return {
       batchId,
@@ -209,10 +243,14 @@ export default async function DashboardPage() {
       totalFeedToday: batchLogs
         .filter((log: any) => new Date(log.date).toDateString() === new Date().toDateString())
         .reduce((s: number, log: any) => s + (log.feedGiven || 0), 0),
-      totalMortality30d: batchLogs.reduce((s: number, log: any) => s + (log.mortality || 0), 0),
+      totalMortality30d: batchLogs
+        .filter((log: any) => new Date(log.date) >= thirtyDaysAgo)
+        .reduce((s: number, log: any) => s + (log.mortality || 0), 0),
       totalExpenses: batchExpenses.reduce((s: number, entry: any) => s + Number(entry.amount || 0), 0),
       totalRevenue: batchRevenue.reduce((s: number, entry: any) => s + Number(entry.totalAmount || 0), 0),
-      chartData: batchChartData,
+      chartDataByRange: Object.fromEntries(
+        DASHBOARD_TIMEFRAMES.map((days) => [String(days), buildRangeSeries(batchLogs, days)])
+      ),
     };
   });
 
@@ -316,44 +354,13 @@ export default async function DashboardPage() {
 
   const buildTankHealthTrend = (batch: any | null) => {
     const batchId = batch ? String(batch._id) : "";
-    const scopedLogs = (batchId
+    const scopedLogs = batchId
       ? recentLogs.filter((log: any) => String(log.batchId || "") === batchId)
-      : recentLogs)
-      .filter((log: any) => new Date(log.date) >= fourteenDaysAgo);
+      : recentLogs;
 
-    const rows: Array<{
-      date: string;
-      feed: number;
-      mortality: number;
-      riskLogs: number;
-      tanksLogged: number;
-    }> = [];
-
-    for (let i = 13; i >= 0; i--) {
-      const day = new Date();
-      day.setDate(day.getDate() - i);
-      const isoDay = day.toISOString().split("T")[0];
-      const dayLogs = scopedLogs.filter((log: any) => new Date(log.date).toISOString().split("T")[0] === isoDay);
-      const tanksLogged = new Set(
-        dayLogs
-          .map((log: any) => String(log.tankId || "").trim() || String(log.tankName || "").trim().toLowerCase())
-          .filter(Boolean),
-      ).size;
-
-      rows.push({
-        date: day.toLocaleDateString("en-NG", { month: "short", day: "numeric" }),
-        feed: dayLogs.reduce((sum: number, log: any) => sum + Number(log.feedGiven || 0), 0),
-        mortality: dayLogs.reduce((sum: number, log: any) => sum + Number(log.mortality || 0), 0),
-        riskLogs: dayLogs.filter((log: any) => {
-          const ph = Number(log.ph);
-          const ammonia = Number(log.ammonia);
-          return (Number.isFinite(ph) && (ph < 6.5 || ph > 8)) || (Number.isFinite(ammonia) && ammonia >= 0.5);
-        }).length,
-        tanksLogged,
-      });
-    }
-
-    return rows;
+    return Object.fromEntries(
+      DASHBOARD_TIMEFRAMES.map((days) => [String(days), buildTankHealthSeries(scopedLogs, days)])
+    );
   };
 
   const tankSnapshots = {
@@ -374,7 +381,7 @@ export default async function DashboardPage() {
     totalMortality30d, totalExpenses, totalRevenue,
     activeBatches: batches.length,
     totalTanks: tanks.length,
-    chartData,
+    chartDataByRange,
     batchSummaries,
     tankSnapshots,
     tankHealthTrend,

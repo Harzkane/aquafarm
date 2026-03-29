@@ -7,6 +7,8 @@ import Link from "next/link";
 import CurrentPlanBadge from "@/components/billing/CurrentPlanBadge";
 import { getPriorityWhatsAppHref } from "@/lib/support";
 
+type DashboardTimeframe = "7" | "14" | "30" | "90";
+
 interface ActionItem {
   level: "info" | "warning" | "danger";
   title: string;
@@ -14,10 +16,24 @@ interface ActionItem {
   href: string;
 }
 
+type ChartPoint = {
+  date: string;
+  feed: number;
+  mortality: number;
+};
+
+type TankHealthPoint = {
+  date: string;
+  feed: number;
+  mortality: number;
+  riskLogs: number;
+  tanksLogged: number;
+};
+
 interface Props {
   totalFish: number; totalInitial: number; totalFeedToday: number;
   totalMortality30d: number; totalExpenses: number; totalRevenue: number;
-  activeBatches: number; totalTanks: number; chartData: any[];
+  activeBatches: number; totalTanks: number; chartDataByRange: Record<DashboardTimeframe, ChartPoint[]>;
   batchSummaries: Array<{
     batchId: string;
     totalFish: number;
@@ -26,7 +42,7 @@ interface Props {
     totalMortality30d: number;
     totalExpenses: number;
     totalRevenue: number;
-    chartData: any[];
+    chartDataByRange: Record<DashboardTimeframe, ChartPoint[]>;
   }>;
   tankSnapshots: {
     all: Array<{
@@ -49,20 +65,8 @@ interface Props {
     }>>;
   };
   tankHealthTrend: {
-    all: Array<{
-      date: string;
-      feed: number;
-      mortality: number;
-      riskLogs: number;
-      tanksLogged: number;
-    }>;
-    byBatch: Record<string, Array<{
-      date: string;
-      feed: number;
-      mortality: number;
-      riskLogs: number;
-      tanksLogged: number;
-    }>>;
+    all: Record<DashboardTimeframe, TankHealthPoint[]>;
+    byBatch: Record<string, Record<DashboardTimeframe, TankHealthPoint[]>>;
   };
   recentMovements: Array<{
     id: string;
@@ -80,6 +84,12 @@ interface Props {
 }
 
 const FREE_LOCKED_ACTION_PREFIXES = ["/financials", "/harvest", "/calendar", "/playbook"];
+const TIMEFRAME_OPTIONS: Array<{ value: DashboardTimeframe; label: string }> = [
+  { value: "7", label: "7D" },
+  { value: "14", label: "14D" },
+  { value: "30", label: "30D" },
+  { value: "90", label: "90D" },
+];
 
 function formatKg(value: number) {
   return Number(value || 0).toFixed(2);
@@ -110,9 +120,10 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function DashboardClient({
   totalFish, totalInitial, totalFeedToday, totalMortality30d,
   totalExpenses, totalRevenue, activeBatches, totalTanks,
-  chartData, batchSummaries, tankSnapshots, tankHealthTrend, recentMovements, actions, batches, tanks, farmName, userName, plan,
+  chartDataByRange, batchSummaries, tankSnapshots, tankHealthTrend, recentMovements, actions, batches, tanks, farmName, userName, plan,
 }: Props) {
   const [selectedBatchId, setSelectedBatchId] = useState("all");
+  const [selectedTimeframe, setSelectedTimeframe] = useState<DashboardTimeframe>("14");
   const isFree = plan === "free";
   const communitySupportHref = process.env.NEXT_PUBLIC_COMMUNITY_SUPPORT_URL || "";
   const prioritySupportHref = getPriorityWhatsAppHref(plan, userName);
@@ -133,7 +144,7 @@ export default function DashboardClient({
         totalMortality30d: selectedBatchSummary.totalMortality30d,
         totalExpenses: selectedBatchSummary.totalExpenses,
         totalRevenue: selectedBatchSummary.totalRevenue,
-        chartData: selectedBatchSummary.chartData,
+        chartDataByRange: selectedBatchSummary.chartDataByRange,
       }
     : {
         totalFish,
@@ -142,7 +153,7 @@ export default function DashboardClient({
         totalMortality30d,
         totalExpenses,
         totalRevenue,
-        chartData,
+        chartDataByRange,
       };
 
   const survivalRate = calcSurvivalRate(scope.totalFish, scope.totalInitial);
@@ -165,8 +176,10 @@ export default function DashboardClient({
     .filter((movement) => !selectedBatch || movement.batchId === selectedBatchId)
     .slice(0, 4);
   const scopedTankHealthTrend = selectedBatch
-    ? (tankHealthTrend.byBatch[selectedBatchId] || [])
-    : tankHealthTrend.all;
+    ? (tankHealthTrend.byBatch[selectedBatchId]?.[selectedTimeframe] || [])
+    : (tankHealthTrend.all[selectedTimeframe] || []);
+  const scopedChartData = scope.chartDataByRange[selectedTimeframe] || [];
+  const timeframeLabel = `Last ${selectedTimeframe} Days`;
 
   const visibleActions = (isFree
     ? actions.filter((a) => !FREE_LOCKED_ACTION_PREFIXES.some((prefix) => a.href.startsWith(prefix)))
@@ -306,11 +319,37 @@ export default function DashboardClient({
 
       {/* KPI Grid */}
       <div className="glass-card p-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="section-title !text-base">Dashboard Scope</h2>
-          <p className="text-xs text-pond-200/65 mt-1">
-            Cards and charts are showing <span className="text-pond-100 font-medium">{scopeLabel}</span>.
-          </p>
+        <div className="space-y-3">
+          <div>
+            <h2 className="section-title !text-base">Dashboard Scope</h2>
+            <p className="text-xs text-pond-200/65 mt-1">
+              Cards and charts are showing <span className="text-pond-100 font-medium">{scopeLabel}</span>.
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-pond-300 mb-1.5 font-medium">Chart Timeframe</p>
+            <div className="flex flex-wrap gap-2">
+              {TIMEFRAME_OPTIONS.map((option) => {
+                const active = selectedTimeframe === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setSelectedTimeframe(option.value)}
+                    className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
+                      active ? "text-pond-100" : "text-pond-200/75 hover:text-pond-100"
+                    }`}
+                    style={{
+                      background: active ? "rgba(117,215,255,0.16)" : "rgba(12, 12, 14, 0.5)",
+                      border: active ? "1px solid rgba(117,215,255,0.4)" : "1px solid rgba(148, 163, 184, 0.12)",
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
         <div className="w-full sm:w-72">
           <label className="block text-xs text-pond-300 mb-1.5 font-medium">View Batch</label>
@@ -487,9 +526,9 @@ export default function DashboardClient({
       <div className="space-y-4">
         {/* Feed chart */}
         <div className="chart-wrap">
-          <h2 className="section-title mb-4">Feed Given (kg) — Last 14 Days</h2>
+          <h2 className="section-title mb-4">Feed Given (kg) — {timeframeLabel}</h2>
           <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={scope.chartData}>
+            <AreaChart data={scopedChartData}>
               <defs>
                 <linearGradient id="feedGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%"  stopColor="#4b5563" stopOpacity={0.4} />
@@ -514,7 +553,7 @@ export default function DashboardClient({
               <div className="flex items-center justify-between gap-3 mb-4">
                 <div>
                   <h2 className="section-title">Tank Health Trend</h2>
-                  <p className="text-xs text-pond-200/65 mt-1">Fourteen-day view of tank-level mortality and water-risk pressure for {scopeLabel}.</p>
+                  <p className="text-xs text-pond-200/65 mt-1">{timeframeLabel} view of tank-level mortality and water-risk pressure for {scopeLabel}.</p>
                 </div>
                 <Link href="/water-quality" className="text-xs text-pond-300 hover:text-pond-100 transition-colors">
                   Open water logs
@@ -551,9 +590,9 @@ export default function DashboardClient({
 
           {/* Mortality chart */}
           <div className="chart-wrap">
-            <h2 className="section-title mb-4">Daily Mortality — Last 14 Days</h2>
+            <h2 className="section-title mb-4">Daily Mortality — {timeframeLabel}</h2>
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={scope.chartData}>
+              <BarChart data={scopedChartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184,0.1)" />
                 <XAxis dataKey="date" tick={{ fill: "rgba(232,245,238,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: "rgba(232,245,238,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} />
