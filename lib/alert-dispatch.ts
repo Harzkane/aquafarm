@@ -108,9 +108,11 @@ export async function dispatchCriticalAlerts(limit: number, dryRun = false): Pro
   const defaultTo = normalizePhone(String(process.env.ALERTS_WHATSAPP_TO || ""));
 
   const alerts = await AlertNotification.find({ active: true, severity: "critical" })
+    .where("status")
+    .in(["new", "in_progress"])
     .sort({ updatedAt: -1 })
     .limit(limit)
-    .select("_id userId title message href severity updatedAt")
+    .select("_id userId title message href severity updatedAt assignedToName")
     .lean<any[]>();
   if (alerts.length === 0) {
     return {
@@ -205,6 +207,13 @@ export async function dispatchCriticalAlerts(limit: number, dryRun = false): Pro
         message: alert.message,
       },
     }).catch(() => {});
+
+    if (sendResult.ok) {
+      await AlertNotification.updateOne(
+        { _id: alert._id },
+        { $set: { lastDeliveredAt: new Date() } }
+      ).catch(() => {});
+    }
 
     if (sample.length < 20) {
       sample.push({

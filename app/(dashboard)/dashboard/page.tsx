@@ -8,9 +8,11 @@ import { Tank } from "@/models/Tank";
 import { FeedInventory } from "@/models/FeedInventory";
 import { CalendarEvent } from "@/models/CalendarEvent";
 import { TankMovement } from "@/models/TankMovement";
+import { User } from "@/models/User";
 import DashboardClient from "./DashboardClient";
 import { getBatchPhase, weeksSince } from "@/lib/utils";
 import { summarizeFeedInventory } from "@/lib/feed-inventory";
+import { getPlanConfig } from "@/lib/plans";
 
 const DASHBOARD_TIMEFRAMES = [7, 14, 30, 90] as const;
 
@@ -71,6 +73,13 @@ export default async function DashboardPage() {
   const userId = (session?.user as any)?.id;
 
   await connectDB();
+
+  const account = await User.findById(userId).select("plan").lean<any>();
+  const userPlan = (account?.plan || "free") as "free" | "pro" | "commercial";
+  const planConfig = getPlanConfig(userPlan);
+  const availableTimeframes = DASHBOARD_TIMEFRAMES.filter((days) =>
+    planConfig.reportHistoryDays == null ? true : days <= planConfig.reportHistoryDays
+  );
 
   const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -227,7 +236,7 @@ export default async function DashboardPage() {
   }
 
   const chartDataByRange = Object.fromEntries(
-    DASHBOARD_TIMEFRAMES.map((days) => [String(days), buildRangeSeries(recentLogs, days)])
+    availableTimeframes.map((days) => [String(days), buildRangeSeries(recentLogs, days)])
   );
 
   const batchSummaries = batches.map((batch: any) => {
@@ -249,7 +258,7 @@ export default async function DashboardPage() {
       totalExpenses: batchExpenses.reduce((s: number, entry: any) => s + Number(entry.amount || 0), 0),
       totalRevenue: batchRevenue.reduce((s: number, entry: any) => s + Number(entry.totalAmount || 0), 0),
       chartDataByRange: Object.fromEntries(
-        DASHBOARD_TIMEFRAMES.map((days) => [String(days), buildRangeSeries(batchLogs, days)])
+        availableTimeframes.map((days) => [String(days), buildRangeSeries(batchLogs, days)])
       ),
     };
   });
@@ -359,7 +368,7 @@ export default async function DashboardPage() {
       : recentLogs;
 
     return Object.fromEntries(
-      DASHBOARD_TIMEFRAMES.map((days) => [String(days), buildTankHealthSeries(scopedLogs, days)])
+      availableTimeframes.map((days) => [String(days), buildTankHealthSeries(scopedLogs, days)])
     );
   };
 
@@ -381,6 +390,7 @@ export default async function DashboardPage() {
     totalMortality30d, totalExpenses, totalRevenue,
     activeBatches: batches.length,
     totalTanks: tanks.length,
+    availableTimeframes: availableTimeframes.map(String),
     chartDataByRange,
     batchSummaries,
     tankSnapshots,

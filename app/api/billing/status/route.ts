@@ -35,6 +35,7 @@ export async function GET() {
       maxActiveBatches: plan.maxActiveBatches,
       maxTanks: plan.maxTanks,
       maxStaffUsers: plan.maxStaffUsers,
+      reportHistoryDays: plan.reportHistoryDays,
     },
     usage: {
       staffUsers,

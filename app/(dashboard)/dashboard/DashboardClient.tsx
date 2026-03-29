@@ -33,6 +33,7 @@ type TankHealthPoint = {
 interface Props {
   totalFish: number; totalInitial: number; totalFeedToday: number;
   totalMortality30d: number; totalExpenses: number; totalRevenue: number;
+  availableTimeframes: string[];
   activeBatches: number; totalTanks: number; chartDataByRange: Record<string, ChartPoint[]>;
   batchSummaries: Array<{
     batchId: string;
@@ -120,10 +121,12 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function DashboardClient({
   totalFish, totalInitial, totalFeedToday, totalMortality30d,
   totalExpenses, totalRevenue, activeBatches, totalTanks,
-  chartDataByRange, batchSummaries, tankSnapshots, tankHealthTrend, recentMovements, actions, batches, tanks, farmName, userName, plan,
+  availableTimeframes, chartDataByRange, batchSummaries, tankSnapshots, tankHealthTrend, recentMovements, actions, batches, tanks, farmName, userName, plan,
 }: Props) {
+  const timeframeOptions = TIMEFRAME_OPTIONS.filter((option) => availableTimeframes.includes(option.value));
+  const defaultTimeframe = (timeframeOptions[timeframeOptions.length - 1]?.value || "14") as DashboardTimeframe;
   const [selectedBatchId, setSelectedBatchId] = useState("all");
-  const [selectedTimeframe, setSelectedTimeframe] = useState<DashboardTimeframe>("14");
+  const [selectedTimeframe, setSelectedTimeframe] = useState<DashboardTimeframe>(defaultTimeframe);
   const isFree = plan === "free";
   const communitySupportHref = process.env.NEXT_PUBLIC_COMMUNITY_SUPPORT_URL || "";
   const prioritySupportHref = getPriorityWhatsAppHref(plan, userName);
@@ -175,11 +178,12 @@ export default function DashboardClient({
   const scopedMovements = recentMovements
     .filter((movement) => !selectedBatch || movement.batchId === selectedBatchId)
     .slice(0, 4);
+  const activeTimeframe = availableTimeframes.includes(selectedTimeframe) ? selectedTimeframe : defaultTimeframe;
   const scopedTankHealthTrend = selectedBatch
-    ? (tankHealthTrend.byBatch[selectedBatchId]?.[selectedTimeframe] || [])
-    : (tankHealthTrend.all[selectedTimeframe] || []);
-  const scopedChartData = scope.chartDataByRange[selectedTimeframe] || [];
-  const timeframeLabel = `Last ${selectedTimeframe} Days`;
+    ? (tankHealthTrend.byBatch[selectedBatchId]?.[activeTimeframe] || [])
+    : (tankHealthTrend.all[activeTimeframe] || []);
+  const scopedChartData = scope.chartDataByRange[activeTimeframe] || [];
+  const timeframeLabel = `Last ${activeTimeframe} Days`;
 
   const visibleActions = (isFree
     ? actions.filter((a) => !FREE_LOCKED_ACTION_PREFIXES.some((prefix) => a.href.startsWith(prefix)))
@@ -329,8 +333,8 @@ export default function DashboardClient({
           <div>
             <p className="text-xs text-pond-300 mb-1.5 font-medium">Chart Timeframe</p>
             <div className="flex flex-wrap gap-2">
-              {TIMEFRAME_OPTIONS.map((option) => {
-                const active = selectedTimeframe === option.value;
+              {timeframeOptions.map((option) => {
+                const active = activeTimeframe === option.value;
                 return (
                   <button
                     key={option.value}

@@ -28,6 +28,7 @@ const PLAN_FEATURES = {
   pro: [
     "Up to 5 active batches",
     "Unlimited logs and tank records",
+    "Dashboard charts up to 90 days",
     "Calendar reminders + harvest channels",
     "Full reports + export",
     "Priority WhatsApp support",
@@ -35,6 +36,7 @@ const PLAN_FEATURES = {
   commercial: [
     "Unlimited batches",
     "Multi-user staff access",
+    "Dashboard charts up to 90 days",
     "Advanced reporting",
     "Operational audit visibility",
     "Dedicated onboarding + monthly check-in",

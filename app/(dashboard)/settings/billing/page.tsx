@@ -8,6 +8,27 @@ import CurrentPlanBadge from "@/components/billing/CurrentPlanBadge";
 import { getPriorityWhatsAppHref } from "@/lib/support";
 import { formatDateNg, formatDateTimeNg } from "@/lib/dates";
 
+const PLAN_CARD_DETAILS = {
+  free: [
+    "1 active batch",
+    "Up to 4 tanks",
+    "Dashboard charts up to 30 days",
+    "Community support",
+  ],
+  pro: [
+    "Up to 5 active batches",
+    "Unlimited tank records",
+    "Extended dashboard history up to 90 days",
+    "Priority WhatsApp support",
+  ],
+  commercial: [
+    "Unlimited active batches",
+    "Up to 5 staff seats",
+    "Extended dashboard history up to 90 days",
+    "Dedicated onboarding and monthly check-ins",
+  ],
+} as const;
+
 type SuccessProgramPayload = {
   onboardingStatus: "not_started" | "in_progress" | "completed";
   onboardingCompletedAt: string | null;
@@ -31,6 +52,7 @@ type BillingStatusPayload = {
     maxActiveBatches: number | null;
     maxTanks: number | null;
     maxStaffUsers?: number | null;
+    reportHistoryDays?: number | null;
   };
   usage?: {
     staffUsers?: number;
@@ -267,6 +289,12 @@ function BillingContent() {
             <p className="text-xs text-pond-200/65">Tank limit</p>
             <p className="text-sm text-pond-100">{billing?.limits?.maxTanks == null ? "Unlimited" : billing.limits.maxTanks}</p>
           </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 px-3 py-2">
+            <p className="text-xs text-pond-200/65">Chart history</p>
+            <p className="text-sm text-pond-100">
+              {billing?.limits?.reportHistoryDays == null ? "Up to 90 days" : `${billing.limits.reportHistoryDays} days`}
+            </p>
+          </div>
           {billing?.limits?.maxStaffUsers != null ? (
             <div className="rounded-xl border border-pond-700/30 bg-black/20 px-3 py-2">
               <p className="text-xs text-pond-200/65">Staff seats</p>
@@ -453,11 +481,16 @@ function BillingContent() {
           <h3 className="mt-1 text-lg font-semibold text-pond-100">Pro Founder</h3>
           <p className="mt-1 text-sm text-pond-200/70">₦5,000 / month</p>
           {isCurrentPlan("pro") ? <p className="mt-1 text-xs text-emerald-300">Current plan</p> : null}
+          <ul className="mt-4 space-y-2 text-sm text-pond-200/80">
+            {PLAN_CARD_DETAILS.pro.map((item) => (
+              <li key={item}>• {item}</li>
+            ))}
+          </ul>
           <button
             type="button"
             onClick={() => setConfirmPlan("pro")}
             disabled={actionLoading !== null || isCurrentPlan("pro")}
-            className="btn-primary mt-4 w-full disabled:cursor-not-allowed disabled:opacity-60"
+            className="btn-primary mt-5 w-full disabled:cursor-not-allowed disabled:opacity-60"
           >
             {actionLoading === "pro" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             {isCurrentPlan("pro") ? "Current plan" : "Upgrade to Pro"}
@@ -469,11 +502,16 @@ function BillingContent() {
           <h3 className="mt-1 text-lg font-semibold text-pond-100">Pro+ Commercial</h3>
           <p className="mt-1 text-sm text-pond-200/70">₦15,000 / month</p>
           {isCurrentPlan("commercial") ? <p className="mt-1 text-xs text-emerald-300">Current plan</p> : null}
+          <ul className="mt-4 space-y-2 text-sm text-pond-200/80">
+            {PLAN_CARD_DETAILS.commercial.map((item) => (
+              <li key={item}>• {item}</li>
+            ))}
+          </ul>
           <button
             type="button"
             onClick={() => setConfirmPlan("commercial")}
             disabled={actionLoading !== null || isCurrentPlan("commercial")}
-            className="btn-secondary mt-4 w-full disabled:cursor-not-allowed disabled:opacity-60"
+            className="btn-secondary mt-5 w-full disabled:cursor-not-allowed disabled:opacity-60"
           >
             {actionLoading === "commercial" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             {isCurrentPlan("commercial") ? "Current plan" : "Upgrade to Commercial"}
