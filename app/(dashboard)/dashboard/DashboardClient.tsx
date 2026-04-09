@@ -10,6 +10,7 @@ import { getPriorityWhatsAppHref } from "@/lib/support";
 type DashboardTimeframe = "7" | "14" | "30" | "90";
 
 interface ActionItem {
+  key: string;
   level: "info" | "warning" | "danger";
   title: string;
   detail: string;
@@ -105,6 +106,12 @@ interface Props {
     date: string;
   }>;
   actions: ActionItem[];
+  actionProgress: {
+    completedTodayCount: number;
+    snoozedCount: number;
+    completedToday: Array<{ key: string; title: string; completedAt: string | null }>;
+    snoozed: Array<{ key: string; title: string; snoozeUntil: string | null }>;
+  };
   batches: any[]; tanks: any[]; farmName: string; userName: string;
   plan: "free" | "pro" | "commercial";
 }
@@ -146,12 +153,14 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function DashboardClient({
   totalFish, totalInitial, totalFeedToday, totalMortality30d,
   totalExpenses, totalRevenue, activeBatches, totalTanks,
-  availableTimeframes, chartDataByRange, batchSummaries, batchReadiness, tankSnapshots, tankHealthTrend, recentMovements, actions, batches, tanks, farmName, userName, plan,
+  availableTimeframes, chartDataByRange, batchSummaries, batchReadiness, tankSnapshots, tankHealthTrend, recentMovements, actions, actionProgress, batches, tanks, farmName, userName, plan,
 }: Props) {
   const timeframeOptions = TIMEFRAME_OPTIONS.filter((option) => availableTimeframes.includes(option.value));
   const defaultTimeframe = (timeframeOptions[timeframeOptions.length - 1]?.value || "14") as DashboardTimeframe;
   const [selectedBatchId, setSelectedBatchId] = useState("all");
   const [selectedTimeframe, setSelectedTimeframe] = useState<DashboardTimeframe>(defaultTimeframe);
+  const [actionBusyKey, setActionBusyKey] = useState("");
+  const [dismissedActionKeys, setDismissedActionKeys] = useState<string[]>([]);
   const isFree = plan === "free";
   const communitySupportHref = process.env.NEXT_PUBLIC_COMMUNITY_SUPPORT_URL || "";
   const prioritySupportHref = getPriorityWhatsAppHref(plan, userName);
@@ -218,7 +227,9 @@ export default function DashboardClient({
   const visibleActions = (isFree
     ? actions.filter((a) => !FREE_LOCKED_ACTION_PREFIXES.some((prefix) => a.href.startsWith(prefix)))
     : actions
-  ).slice(0, 6);
+  )
+    .filter((action) => !dismissedActionKeys.includes(action.key))
+    .slice(0, 6);
   const urgentCount = visibleActions.filter((action) => action.level === "danger" || action.level === "warning").length;
   const dangerCount = visibleActions.filter((action) => action.level === "danger").length;
   const infoCount = visibleActions.filter((action) => action.level === "info").length;
@@ -316,6 +327,30 @@ export default function DashboardClient({
     },
   ];
 
+  async function updateActionState(action: ActionItem, status: "completed" | "snoozed") {
+    setActionBusyKey(action.key);
+    try {
+      const res = await fetch("/api/dashboard/actions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key: action.key,
+          status,
+          title: action.title,
+          href: action.href,
+          category: action.category,
+          level: action.level,
+          snoozeDays: status === "snoozed" ? 1 : undefined,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || "Failed to update action");
+      setDismissedActionKeys((prev) => (prev.includes(action.key) ? prev : [...prev, action.key]));
+    } finally {
+      setActionBusyKey("");
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -361,10 +396,9 @@ export default function DashboardClient({
           </p>
           <div className="space-y-2.5">
             {visibleActions.map((action, i) => (
-              <Link
-                key={`${action.title}-${i}`}
-                href={action.href}
-                className="block rounded-xl px-4 py-3 transition-colors"
+              <div
+                key={`${action.key}-${i}`}
+                className="rounded-xl px-4 py-3 transition-colors"
                 style={{ background: "rgba(12, 12, 14, 0.7)", border: "1px solid rgba(148, 163, 184, 0.16)" }}
               >
                 <div className="flex items-center justify-between gap-3">
@@ -385,12 +419,86 @@ export default function DashboardClient({
                       {action.title}
                     </p>
                   </div>
-                  <span className="text-xs text-pond-200/65">{action.actionLabel}</span>
+                  <Link href={action.href} className="text-xs text-pond-200/65 hover:text-pond-100 transition-colors">
+                    {action.actionLabel}
+                  </Link>
                 </div>
                 <p className="text-xs text-pond-200/65 mt-2">{action.detail}</p>
                 <p className="text-[11px] text-pond-300 mt-1">Why now: {action.whyNow}</p>
-              </Link>
+                <div className="mt-3 flex items-center gap-2 flex-wrap">
+                  <Link href={action.href} className="btn-secondary !px-3 !py-1.5 text-xs">
+                    Open
+                  </Link>
+                  <button
+                    type="button"
+                    className="btn-secondary !px-3 !py-1.5 text-xs"
+                    onClick={() => updateActionState(action, "snoozed")}
+                    disabled={actionBusyKey === action.key}
+                  >
+                    {actionBusyKey === action.key ? "Saving..." : "Snooze 1 day"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary !px-3 !py-1.5 text-xs text-emerald-200"
+                    onClick={() => updateActionState(action, "completed")}
+                    disabled={actionBusyKey === action.key}
+                  >
+                    {actionBusyKey === action.key ? "Saving..." : "Done today"}
+                  </button>
+                </div>
+              </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {(actionProgress.completedTodayCount > 0 || actionProgress.snoozedCount > 0) && (
+        <div className="glass-card p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="section-title !text-base">Execution Memory</h2>
+              <p className="text-xs text-pond-200/65 mt-1">A quick record of what the team has already handled or deferred today.</p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <span className="badge badge-green">{actionProgress.completedTodayCount} done today</span>
+              <span className="badge badge-water">{actionProgress.snoozedCount} snoozed</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="rounded-xl px-4 py-3" style={{ background: "rgba(12, 12, 14,0.45)", border: "1px solid rgba(148, 163, 184,0.1)" }}>
+              <p className="text-xs uppercase tracking-wider text-pond-300 mb-2">Completed Today</p>
+              {actionProgress.completedToday.length === 0 ? (
+                <p className="text-sm text-pond-200/65">Nothing has been marked done yet today.</p>
+              ) : (
+                <div className="space-y-2">
+                  {actionProgress.completedToday.map((item) => (
+                    <div key={item.key} className="text-sm text-pond-100">
+                      <p>{item.title}</p>
+                      <p className="text-xs text-pond-300 mt-1">
+                        {item.completedAt ? `Completed ${new Date(item.completedAt).toLocaleTimeString("en-NG", { hour: "numeric", minute: "2-digit" })}` : "Completed today"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="rounded-xl px-4 py-3" style={{ background: "rgba(12, 12, 14,0.45)", border: "1px solid rgba(148, 163, 184,0.1)" }}>
+              <p className="text-xs uppercase tracking-wider text-pond-300 mb-2">Snoozed Until Later</p>
+              {actionProgress.snoozed.length === 0 ? (
+                <p className="text-sm text-pond-200/65">No command-center actions are snoozed right now.</p>
+              ) : (
+                <div className="space-y-2">
+                  {actionProgress.snoozed.map((item) => (
+                    <div key={item.key} className="text-sm text-pond-100">
+                      <p>{item.title}</p>
+                      <p className="text-xs text-pond-300 mt-1">
+                        {item.snoozeUntil ? `Returns ${new Date(item.snoozeUntil).toLocaleDateString("en-NG", { day: "numeric", month: "short" })}` : "Snoozed"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

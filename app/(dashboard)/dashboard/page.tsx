@@ -9,6 +9,7 @@ import { FeedInventory } from "@/models/FeedInventory";
 import { CalendarEvent } from "@/models/CalendarEvent";
 import { TankMovement } from "@/models/TankMovement";
 import { AlertNotification } from "@/models/AlertNotification";
+import { CommandActionState } from "@/models/CommandActionState";
 import { User } from "@/models/User";
 import DashboardClient from "./DashboardClient";
 import { getBatchPhase, weeksSince } from "@/lib/utils";
@@ -112,10 +113,14 @@ export default async function DashboardPage() {
       .populate("batchId", "name")
       .lean<any[]>(),
     AlertNotification.find({ userId, active: true })
-      .select("title source severity status href nextStepNote followUpDueAt verificationStatus verificationNote assignedToName updatedAt")
+      .select("key title source severity status href nextStepNote followUpDueAt verificationStatus verificationNote assignedToName updatedAt")
       .sort({ severityRank: -1, updatedAt: -1 })
       .lean<any[]>(),
   ]);
+  const actionStates = await CommandActionState.find({ userId })
+    .select("key status completedAt snoozeUntil")
+    .lean<any[]>();
+  const actionStateMap = new Map(actionStates.map((row) => [String(row.key), row]));
 
   const completedMilestones = new Set(
     calendarEvents.map((event: any) => `${String(event.batchId)}:${String(event.kind)}:${Number(event.milestoneWeek)}`)
@@ -145,6 +150,7 @@ export default async function DashboardPage() {
 
   // Build action items for operator focus
   const actions: Array<{
+    key: string;
     level: "info" | "warning" | "danger";
     title: string;
     detail: string;
@@ -190,6 +196,7 @@ export default async function DashboardPage() {
 
   if (batches.length === 0) {
     actions.push({
+      key: "setup:first-batch",
       level: "info",
       title: "Create your first batch",
       detail: "Start with batch details so growth, feeding and mortality can be tracked.",
@@ -213,6 +220,7 @@ export default async function DashboardPage() {
       const weeksToNext = nextMilestone.week - weeks;
       if (weeksToNext >= 0 && weeksToNext <= 1) {
         actions.push({
+          key: `planning:${String(batch._id)}:${nextMilestone.kind}:${nextMilestone.week}`,
           level: "warning",
           title: `${batch.name}: ${weeksToNext === 0 ? nextMilestone.dueNowLabel : nextMilestone.label}`,
           detail: weeksToNext === 0 ? "Due now." : nextMilestone.dueSoonLabel,
@@ -227,6 +235,7 @@ export default async function DashboardPage() {
 
   if (tanks.length === 0) {
     actions.push({
+      key: "setup:no-tanks",
       level: "warning",
       title: "No tanks configured",
       detail: "Add your tanks to improve planning and stocking decisions.",
@@ -239,6 +248,7 @@ export default async function DashboardPage() {
 
   if (!todayHasLog && batches.length > 0) {
     actions.push({
+      key: "logging:no-daily-log",
       level: "warning",
       title: "No daily log yet",
       detail: "Record today's feed and water checks to keep trends accurate.",
@@ -251,6 +261,7 @@ export default async function DashboardPage() {
 
   if (recentMortality > 0 && totalFish > 0 && recentMortality / totalFish >= 0.01) {
     actions.push({
+      key: "health:mortality-spike",
       level: "danger",
       title: "Mortality spike in last 3 days",
       detail: `${recentMortality} deaths recorded recently. Review causes and tank conditions.`,
@@ -263,6 +274,7 @@ export default async function DashboardPage() {
 
   if (waterAlerts > 0) {
     actions.push({
+      key: "health:water-quality-risk",
       level: "warning",
       title: "Water quality out of range",
       detail: `${waterAlerts} recent log${waterAlerts > 1 ? "s show" : " shows"} pH, ammonia, or dissolved oxygen risk.`,
@@ -275,6 +287,7 @@ export default async function DashboardPage() {
 
   if (batches.length > 0 && growthSampleLogs14d.length === 0) {
     actions.push({
+      key: "logging:no-growth-sample",
       level: "info",
       title: "No recent growth sample",
       detail: "No fish count or average weight sample has been logged in the last 14 days.",
@@ -287,6 +300,7 @@ export default async function DashboardPage() {
 
   if (failedVerification) {
     actions.push({
+      key: `alerts:verification-failed:${String(failedVerification.key || failedVerification.title)}`,
       level: failedVerification.severity === "critical" ? "danger" : "warning",
       title: `Verification failed: ${failedVerification.title}`,
       detail: failedVerification.verificationNote
@@ -301,6 +315,7 @@ export default async function DashboardPage() {
 
   if (overdueFollowUp) {
     actions.push({
+      key: `alerts:follow-up-overdue:${String(overdueFollowUp.key || overdueFollowUp.title)}`,
       level: overdueFollowUp.severity === "critical" ? "danger" : "warning",
       title: `Follow-up overdue: ${overdueFollowUp.title}`,
       detail: overdueFollowUp.nextStepNote
@@ -313,6 +328,7 @@ export default async function DashboardPage() {
     });
   } else if (verifiedWaitingFollowUpCount > 0) {
     actions.push({
+      key: "alerts:verification-scheduled",
       level: "info",
       title: "Verification checks scheduled",
       detail: `${verifiedWaitingFollowUpCount} active alert${verifiedWaitingFollowUpCount > 1 ? "s have" : " has"} a pending verification check.`,
@@ -325,6 +341,7 @@ export default async function DashboardPage() {
 
   if (readyBatch) {
     actions.push({
+      key: `harvest:ready:${readyBatch.batchId}`,
       level: "warning",
       title: `${readyBatch.batchName} is ready for harvest review`,
       detail:
@@ -338,6 +355,7 @@ export default async function DashboardPage() {
     });
   } else if (approachingBatch) {
     actions.push({
+      key: `harvest:approaching:${approachingBatch.batchId}`,
       level: "info",
       title: `${approachingBatch.batchName} is approaching harvest readiness`,
       detail:
@@ -354,6 +372,7 @@ export default async function DashboardPage() {
   const harvestReady = batches.filter((b: any) => weeksSince(b.stockingDate) >= 18).length;
   if (harvestReady > 0) {
     actions.push({
+      key: "harvest:window-open",
       level: "info",
       title: "Harvest window open",
       detail: `${harvestReady} batch${harvestReady > 1 ? "es are" : " is"} in harvest range.`,
@@ -368,6 +387,7 @@ export default async function DashboardPage() {
   const mostUrgentFeed = feedSummary.lowStockProducts[0];
   if (mostUrgentFeed) {
     actions.push({
+      key: `inventory:feed-low:${String(mostUrgentFeed.key || mostUrgentFeed.label)}`,
       level: mostUrgentFeed.lowStockSeverity === "critical" ? "danger" : "warning",
       title: `${mostUrgentFeed.label} running low`,
       detail:
@@ -382,7 +402,42 @@ export default async function DashboardPage() {
   }
 
   const actionPriority = { danger: 0, warning: 1, info: 2 } as const;
-  actions.sort((a, b) => actionPriority[a.level] - actionPriority[b.level] || a.title.localeCompare(b.title));
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const visibleActions = actions.filter((action) => {
+    const state = actionStateMap.get(action.key);
+    if (!state) return true;
+    const snoozeUntil = state.snoozeUntil ? new Date(state.snoozeUntil) : null;
+    const completedAt = state.completedAt ? new Date(state.completedAt) : null;
+    if (state.status === "snoozed" && snoozeUntil && snoozeUntil.getTime() >= startOfToday.getTime()) return false;
+    if (state.status === "completed" && completedAt && completedAt.getTime() >= startOfToday.getTime()) return false;
+    return true;
+  });
+  visibleActions.sort((a, b) => actionPriority[a.level] - actionPriority[b.level] || a.title.localeCompare(b.title));
+  const completedToday = actionStates
+    .filter((state) => {
+      const completedAt = state.completedAt ? new Date(state.completedAt) : null;
+      return state.status === "completed" && completedAt && completedAt.getTime() >= startOfToday.getTime();
+    })
+    .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
+    .slice(0, 3)
+    .map((state) => ({
+      key: String(state.key),
+      title: String(state.title || "Completed task"),
+      completedAt: state.completedAt ? new Date(state.completedAt).toISOString() : null,
+    }));
+  const snoozedActions = actionStates
+    .filter((state) => {
+      const snoozeUntil = state.snoozeUntil ? new Date(state.snoozeUntil) : null;
+      return state.status === "snoozed" && snoozeUntil && snoozeUntil.getTime() >= startOfToday.getTime();
+    })
+    .sort((a, b) => new Date(a.snoozeUntil).getTime() - new Date(b.snoozeUntil).getTime())
+    .slice(0, 3)
+    .map((state) => ({
+      key: String(state.key),
+      title: String(state.title || "Snoozed task"),
+      snoozeUntil: state.snoozeUntil ? new Date(state.snoozeUntil).toISOString() : null,
+    }));
 
   const chartDataByRange = Object.fromEntries(
     availableTimeframes.map((days) => [String(days), buildRangeSeries(recentLogs, days)])
@@ -552,7 +607,13 @@ export default async function DashboardPage() {
     tankSnapshots,
     tankHealthTrend,
     recentMovements: movementSummaries,
-    actions: actions.slice(0, 6),
+    actions: visibleActions.slice(0, 6),
+    actionProgress: {
+      completedTodayCount: completedToday.length,
+      snoozedCount: snoozedActions.length,
+      completedToday,
+      snoozed: snoozedActions,
+    },
     batches: JSON.parse(JSON.stringify(batches)),
     tanks: JSON.parse(JSON.stringify(tanks)),
     farmName: (session?.user as any)?.farmName || "My Catfish Farm",
