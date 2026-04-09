@@ -95,7 +95,7 @@ export default function AuditPage() {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="font-display text-2xl font-semibold text-pond-100">Operational Audit</h1>
-          <p className="mt-1 text-sm text-pond-200/75">Track who changed what and when across your farm operations.</p>
+          <p className="mt-1 text-sm text-pond-200/75">Review who changed what across billing, staff, batches, tanks, and logs so operational accountability stays visible.</p>
         </div>
         <div className="badge badge-green">
           {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
@@ -106,6 +106,27 @@ export default function AuditPage() {
       {error ? (
         <div className="rounded-xl border border-red-400/35 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>
       ) : null}
+
+      <div className="glass-card p-5 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h2 className="section-title !text-base">Audit Guide</h2>
+          <p className="text-xs text-pond-200/65">Use this page for traceability, not day-to-day farm entry</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-pond-200/75">
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Best Use</p>
+            <p>Search here when you need to confirm who made a change, when it happened, and which area of the product it affected.</p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Filter Strategy</p>
+            <p>Start with the resource filter first, then narrow by actor, action, or summary text if the history is busy.</p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">What It Means</p>
+            <p>These logs help explain operational changes, but they do not modify any farm data by themselves.</p>
+          </div>
+        </div>
+      </div>
 
       <div className="glass-card p-4">
         <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -124,6 +145,7 @@ export default function AuditPage() {
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-pond-300" />
           <input
             className="field pl-9"
+            aria-label="Search audit events"
             placeholder="Search actor, action, resource, summary"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -137,7 +159,10 @@ export default function AuditPage() {
           <p className="text-xs text-pond-200/65">Dates shown in local formatted time</p>
         </div>
         {totalLogs === 0 ? (
-          <div className="p-10 text-center text-sm text-pond-200/70">No audit events found.</div>
+          <div className="p-10 text-center text-sm text-pond-200/70">
+            No audit events found.
+            <p className="mt-2 text-xs text-pond-200/55">Try widening your filters or wait until more administrative activity has happened in the workspace.</p>
+          </div>
         ) : (
           <>
             <div className="divide-y divide-pond-700/20">

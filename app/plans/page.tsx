@@ -29,7 +29,7 @@ const PLAN_FEATURES = {
     "Up to 5 active batches",
     "Unlimited logs and tank records",
     "Dashboard charts up to 90 days",
-    "Calendar reminders + harvest channels",
+    "Calendar reminders + harvest tracking",
     "Full reports + export",
     "Priority WhatsApp support",
   ],
@@ -46,7 +46,7 @@ const PLAN_FEATURES = {
 const FAQS = [
   {
     q: "Can I start free and upgrade later?",
-    a: "Yes. You can start on Free, unlock Pro trial, and upgrade only when value is clear on your farm.",
+    a: "Yes. Start with real farm records first, then upgrade once the reports and controls are clearly helping your operation.",
   },
   {
     q: "Do you support Nigerian payments?",
@@ -80,6 +80,7 @@ function PlansContent() {
   const [verifyState, setVerifyState] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [verifyMessage, setVerifyMessage] = useState("");
   const [verifiedRef, setVerifiedRef] = useState("");
+  const [authResolved, setAuthResolved] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<"free" | "pro" | "commercial">("free");
   const [billingState, setBillingState] = useState<"inactive" | "trialing" | "active" | "past_due" | "canceled">("inactive");
@@ -151,6 +152,9 @@ function PlansContent() {
       } catch {
         if (!mounted) return;
         setIsAuthenticated(false);
+      } finally {
+        if (!mounted) return;
+        setAuthResolved(true);
       }
     })();
     return () => {
@@ -200,6 +204,8 @@ function PlansContent() {
 
   const isPlanActive = (plan: "pro" | "commercial") =>
     isAuthenticated && currentPlan === plan && (billingState === "active" || billingState === "trialing");
+  const primaryHref = isAuthenticated ? "/dashboard" : "/login";
+  const primaryLabel = authResolved ? (isAuthenticated ? "Open dashboard" : "Start free") : "Loading...";
 
   const confirmMeta =
     confirmPlan === "commercial"
@@ -265,24 +271,21 @@ function PlansContent() {
           <div className="space-y-4">
             <p className="text-xs uppercase tracking-[0.16em] text-[#9aa6b2]">Plans & ROI</p>
             <h1 className="font-display text-4xl leading-[1.05] text-white lg:text-6xl">
-              Run a More Profitable Catfish Cycle
+              Pay for AquaFarm only when the value is obvious.
             </h1>
             <p className="max-w-2xl text-[#b7c1cb]">
-              Track feed, mortality, water quality, and harvest profit in one place. Built for Nigerian fish farms that
-              want fewer losses and stronger margins.
+              Start free, build your operating record, and upgrade when tighter control over feed, mortality, water
+              quality, and harvest performance is already helping the farm.
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
-              {isAuthenticated ? (
-                <Link href="/dashboard" className="btn-primary">
-                  Open dashboard
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              ) : (
-                <Link href="/login" className="btn-primary">
-                  Start free
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              )}
+              <Link
+                href={primaryHref}
+                aria-disabled={!authResolved}
+                className={`btn-primary ${!authResolved ? "pointer-events-none opacity-70" : ""}`}
+              >
+                {primaryLabel}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
               <a href="#plans" className="btn-secondary">
                 See plans
               </a>
@@ -291,32 +294,33 @@ function PlansContent() {
               <StatPill label="Currency" value="Naira billing" />
               <StatPill label="Support" value="WhatsApp onboarding" />
               <StatPill label="Built" value="For Nigerian farms" />
+              <StatPill label="Best path" value="Start free first" />
             </div>
           </div>
 
           <div className="rounded-xl border border-white/10 bg-[#0c1117] p-5">
-            <p className="text-sm font-medium text-white">Why farmers pay</p>
+            <p className="text-sm font-medium text-white">What the paid plans unlock</p>
             <div className="mt-4 space-y-3">
               <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
                 <div className="mb-1.5 flex items-center gap-2 text-white">
                   <Fish className="h-4 w-4 text-[#5ab5ff]" />
-                  <span className="text-sm font-medium">Reduce feed waste</span>
+                  <span className="text-sm font-medium">More complete farm visibility</span>
                 </div>
-                <p className="text-sm text-[#a8b3bf]">Track feed entry against stock and prevent hidden overfeeding cost.</p>
+                <p className="text-sm text-[#a8b3bf]">Track more batches, keep more history, and see the full production picture over time.</p>
               </div>
               <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
                 <div className="mb-1.5 flex items-center gap-2 text-white">
                   <ShieldCheck className="h-4 w-4 text-[#7dd3a8]" />
-                  <span className="text-sm font-medium">Catch mortality earlier</span>
+                  <span className="text-sm font-medium">Earlier operational response</span>
                 </div>
-                <p className="text-sm text-[#a8b3bf]">Daily logs reveal bad trends before they become expensive losses.</p>
+                <p className="text-sm text-[#a8b3bf]">Use reports, reminders, and alerts to catch bad patterns before they become expensive.</p>
               </div>
               <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
                 <div className="mb-1.5 flex items-center gap-2 text-white">
                   <TrendingUp className="h-4 w-4 text-[#f6c665]" />
-                  <span className="text-sm font-medium">Improve harvest margins</span>
+                  <span className="text-sm font-medium">Better cycle review</span>
                 </div>
-                <p className="text-sm text-[#a8b3bf]">Know true cost/fish and make better timing and sales-channel decisions.</p>
+                <p className="text-sm text-[#a8b3bf]">Review cost, survival, and harvest results with enough history to improve the next cycle.</p>
               </div>
             </div>
           </div>
@@ -332,7 +336,7 @@ function PlansContent() {
             <article className="rounded-2xl border border-white/10 bg-[#111821] p-5">
               <p className="text-sm text-[#b8c3cf]">Starter</p>
               <h3 className="mt-1 text-2xl font-semibold text-white">Free</h3>
-              <p className="mt-1 text-sm text-[#8ea0b3]">For owner-operated farms starting digital records.</p>
+              <p className="mt-1 text-sm text-[#8ea0b3]">Best for farms replacing notebooks or spreadsheets with a daily digital record.</p>
               <ul className="mt-4 space-y-2.5">
                 {PLAN_FEATURES.free.map((item) => (
                   <li key={item} className="flex items-start gap-2 text-sm text-[#c8d3df]">
@@ -341,15 +345,13 @@ function PlansContent() {
                   </li>
                 ))}
               </ul>
-              {isAuthenticated ? (
-                <Link href="/dashboard" className="btn-secondary mt-5 w-full">
-                  Go to dashboard
-                </Link>
-              ) : (
-                <Link href="/login" className="btn-secondary mt-5 w-full">
-                  Create free account
-                </Link>
-              )}
+              <Link
+                href={primaryHref}
+                aria-disabled={!authResolved}
+                className={`btn-secondary mt-5 w-full ${!authResolved ? "pointer-events-none opacity-70" : ""}`}
+              >
+                {authResolved ? (isAuthenticated ? "Go to dashboard" : "Create free account") : "Loading..."}
+              </Link>
             </article>
 
             <article className="relative rounded-2xl border border-[#5ab5ff]/45 bg-gradient-to-b from-[#122131] to-[#101923] p-5 shadow-[0_0_0_1px_rgba(90,181,255,0.15)]">
@@ -359,7 +361,7 @@ function PlansContent() {
               </div>
               <p className="text-sm text-[#b8c3cf]">Growth</p>
               <h3 className="mt-1 text-2xl font-semibold text-white">Pro Founder</h3>
-              <p className="mt-1 text-sm text-[#8ea0b3]">₦5,000/month for first 100 farms.</p>
+              <p className="mt-1 text-sm text-[#8ea0b3]">₦5,000/month for farms that want stronger operating control and reporting.</p>
               {isPlanActive("pro") ? (
                 <p className="mt-1 text-xs text-emerald-300">Current plan</p>
               ) : null}
@@ -371,30 +373,28 @@ function PlansContent() {
                   </li>
                 ))}
               </ul>
-              {isAuthenticated ? (
-                <Link href="/dashboard" className="btn-primary mt-5 w-full">
-                  Open dashboard
-                </Link>
-              ) : (
-                <Link href="/login" className="btn-primary mt-5 w-full">
-                  Start free first
-                </Link>
-              )}
+              <Link
+                href={primaryHref}
+                aria-disabled={!authResolved}
+                className={`btn-primary mt-5 w-full ${!authResolved ? "pointer-events-none opacity-70" : ""}`}
+              >
+                {authResolved ? (isAuthenticated ? "Open dashboard" : "Start free first") : "Loading..."}
+              </Link>
               <button
                 type="button"
                 onClick={() => setConfirmPlan("pro")}
-                disabled={checkoutPlan !== null || isPlanActive("pro")}
+                disabled={!authResolved || checkoutPlan !== null || isPlanActive("pro")}
                 className="btn-primary mt-2 w-full disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {checkoutPlan === "pro" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {isPlanActive("pro") ? "Current plan" : "Start Pro trial"}
+                {!authResolved ? "Loading..." : isPlanActive("pro") ? "Current plan" : "Start Pro trial"}
               </button>
             </article>
 
             <article className="rounded-2xl border border-white/10 bg-[#111821] p-5">
               <p className="text-sm text-[#b8c3cf]">Commercial</p>
               <h3 className="mt-1 text-2xl font-semibold text-white">Pro+ Commercial</h3>
-              <p className="mt-1 text-sm text-[#8ea0b3]">₦15,000/month for larger operations.</p>
+              <p className="mt-1 text-sm text-[#8ea0b3]">₦15,000/month for larger operations with staff, controls, and deeper visibility needs.</p>
               {isPlanActive("commercial") ? (
                 <p className="mt-1 text-xs text-emerald-300">Current plan</p>
               ) : null}
@@ -409,11 +409,13 @@ function PlansContent() {
               <button
                 type="button"
                 onClick={() => setConfirmPlan("commercial")}
-                disabled={checkoutPlan !== null || isPlanActive("commercial")}
+                disabled={!authResolved || checkoutPlan !== null || isPlanActive("commercial")}
                 className="btn-secondary mt-5 w-full disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {checkoutPlan === "commercial" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {isPlanActive("commercial")
+                {!authResolved
+                  ? "Loading..."
+                  : isPlanActive("commercial")
                   ? "Current plan"
                   : isAuthenticated
                     ? "Upgrade to Commercial"
@@ -434,8 +436,8 @@ function PlansContent() {
             </div>
             <h2 className="section-title">A Small Fee Can Save a Full Cycle</h2>
             <p className="mt-2 max-w-xl text-sm text-[#9fb0c0]">
-              Use your numbers. If better tracking saves even a small mortality percentage, subscription cost is usually
-              recovered quickly.
+              Use your numbers. If better monitoring and earlier response save even a small percentage of fish, the
+              subscription cost is usually small compared with one avoided loss.
             </p>
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
               <label className="text-sm text-[#bfd0de]">
@@ -503,18 +505,16 @@ function PlansContent() {
           <p className="text-xs uppercase tracking-[0.14em] text-[#95a7b8]">Founder Offer</p>
           <h2 className="mt-2 font-display text-3xl text-white">Start Free. Upgrade After You See Results.</h2>
           <p className="mx-auto mt-2 max-w-2xl text-sm text-[#aab8c7]">
-            Join early, lock in founder pricing, and run your next cycle with tighter operational control.
+            Keep adoption easy for your farm team now, then unlock more power as AquaFarm becomes part of your daily routine.
           </p>
           <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
-            {isAuthenticated ? (
-              <Link href="/dashboard" className="btn-primary">
-                Open dashboard
-              </Link>
-            ) : (
-              <Link href="/login" className="btn-primary">
-                Create free account
-              </Link>
-            )}
+            <Link
+              href={primaryHref}
+              aria-disabled={!authResolved}
+              className={`btn-primary ${!authResolved ? "pointer-events-none opacity-70" : ""}`}
+            >
+              {authResolved ? (isAuthenticated ? "Open dashboard" : "Create free account") : "Loading..."}
+            </Link>
             <a
               href={whatsappHref || "#"}
               target="_blank"

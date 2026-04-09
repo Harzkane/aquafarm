@@ -271,6 +271,10 @@ export default function FeedInventoryPage() {
 
   const lowStock = data.lowStockProducts.length > 0;
   const hasOpeningStock = Number(data.openingStockKg || 0) > 0;
+  const criticalLowStockCount = data.lowStockProducts.filter((product) => product.lowStockSeverity === "critical").length;
+  const nextProductToRunOut = [...data.products]
+    .filter((product) => product.estimatedDaysLeft != null)
+    .sort((a, b) => (a.estimatedDaysLeft ?? Number.POSITIVE_INFINITY) - (b.estimatedDaysLeft ?? Number.POSITIVE_INFINITY))[0];
   const openingStockLabel = data.openingStockBrand
     ? `${data.openingStockBrand}${data.openingStockSizeMm != null ? ` ${data.openingStockSizeMm}mm` : ""}`
     : "Opening stock";
@@ -286,7 +290,7 @@ export default function FeedInventoryPage() {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="font-display text-2xl font-semibold text-pond-100">Feed Inventory</h1>
-          <p className="text-pond-200/75 text-sm mt-1">Track initial stock, purchases, and auto-calculate balance from feed usage logs</p>
+          <p className="text-pond-200/75 text-sm mt-1">Track feed on hand, new purchases, and projected runway from your feeding records.</p>
         </div>
         <button className="btn-primary" onClick={() => { resetForm(); setCreateError(""); setShowCreate(true); }}>
           <Plus className="w-4 h-4" /> Add Purchase
@@ -313,6 +317,35 @@ export default function FeedInventoryPage() {
           <p className={`font-mono text-2xl font-semibold ${lowStock ? "text-danger" : "text-pond-200"}`}>
             {data.products.length}
           </p>
+        </div>
+      </div>
+
+      <div className="glass-card p-5 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h2 className="section-title !text-base">Inventory Guide</h2>
+          <p className="text-xs text-pond-200/65">Match feed products to what farmers actually use</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-pond-200/75">
+          <div className="rounded-xl border border-pond-700/30 bg-black/15 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Low-Stock Status</p>
+            <p>
+              {lowStock
+                ? `${data.lowStockProducts.length} product${data.lowStockProducts.length > 1 ? "s are" : " is"} below a safe runway${criticalLowStockCount > 0 ? `, with ${criticalLowStockCount} critical` : ""}.`
+                : "All tracked products currently have a healthy feed runway."}
+            </p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/15 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Next To Run Out</p>
+            <p>
+              {nextProductToRunOut
+                ? `${nextProductToRunOut.label} has about ${formatForecastHorizon(nextProductToRunOut.estimatedDaysLeft)} left at current usage.`
+                : "Forecasts will appear after feed products and feeding logs start building history."}
+            </p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/15 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Stock Accuracy</p>
+            <p>Keep brand and pellet size consistent so feed usage deducts from the correct product instead of a generic total.</p>
+          </div>
         </div>
       </div>
 
@@ -362,14 +395,17 @@ export default function FeedInventoryPage() {
           <div>
             <label className="block text-xs text-pond-300 mb-1.5 font-medium">Initial Stock (kg)</label>
             <input className="field" type="number" min={0} step="0.1" value={openingStockEdit} onChange={(e) => setOpeningStockEdit(e.target.value)} />
+            <p className="text-xs text-pond-200/60 mt-1">Use this only for stock already on hand before purchase logging began.</p>
           </div>
           <div>
             <label className="block text-xs text-pond-300 mb-1.5 font-medium">Opening Brand / Product</label>
             <input className="field" placeholder="Aller Aqua" value={openingBrandEdit} onChange={(e) => setOpeningBrandEdit(e.target.value)} />
+            <p className="text-xs text-pond-200/60 mt-1">Match the brand name you will use later in purchase entries.</p>
           </div>
           <div>
             <label className="block text-xs text-pond-300 mb-1.5 font-medium">Pellet Size (mm)</label>
             <input className="field" type="number" min={0.1} step="0.1" placeholder="2" value={openingSizeEdit} onChange={(e) => setOpeningSizeEdit(e.target.value)} />
+            <p className="text-xs text-pond-200/60 mt-1">Pellet size helps the system deduct usage from the right product mix.</p>
           </div>
           <div>
             <label className="block text-xs text-pond-300 mb-1.5 font-medium">Acquired Date</label>
@@ -382,10 +418,12 @@ export default function FeedInventoryPage() {
           <div>
             <label className="block text-xs text-pond-300 mb-1.5 font-medium">Opening Stock Value (₦)</label>
             <input className="field" type="number" min={0} placeholder="18500" value={openingCostEdit} onChange={(e) => setOpeningCostEdit(e.target.value)} />
+            <p className="text-xs text-pond-200/60 mt-1">Optional, but useful if you want more accurate cost analysis from the start.</p>
           </div>
           <div>
             <label className="block text-xs text-pond-300 mb-1.5 font-medium">Opening Supplier</label>
             <input className="field" placeholder="Chi Farms" value={openingSupplierEdit} onChange={(e) => setOpeningSupplierEdit(e.target.value)} />
+            <p className="text-xs text-pond-200/60 mt-1">Add the supplier if it helps you trace product quality or reorder history later.</p>
           </div>
         </div>
         {Number(data.openingStockKg || 0) > 0 ? (
@@ -407,7 +445,7 @@ export default function FeedInventoryPage() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="section-title !text-base">Feed Products</h2>
-            <p className="text-xs text-pond-200/70 mt-1">Stock is forecast per product, not just total kg.</p>
+            <p className="text-xs text-pond-200/70 mt-1">Stock is forecast per product, not just total kg, so pellet size and brand matter.</p>
           </div>
           {lowStock ? <span className="badge badge-red">{data.lowStockProducts.length} low-stock</span> : <span className="badge badge-green">Healthy</span>}
         </div>
@@ -453,7 +491,7 @@ export default function FeedInventoryPage() {
       <div className="glass-card p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="md:col-span-3 relative">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-pond-300" />
-          <input className="field pl-9" placeholder="Search brand, supplier, notes" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <input className="field pl-9" aria-label="Search feed purchases" placeholder="Search brand, supplier, notes" value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
       </div>
 
@@ -468,6 +506,7 @@ export default function FeedInventoryPage() {
             <p className="text-pond-200/65 text-sm">
               No purchases recorded yet{data.openingStockKg > 0 ? ", but opening stock is already on hand." : ""}
             </p>
+            <p className="text-pond-200/55 text-xs mt-2">Add a purchase whenever new bags arrive so feed runway and cost tracking stay reliable.</p>
           </div>
         ) : (
           <>
@@ -571,33 +610,40 @@ export default function FeedInventoryPage() {
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Brand / Type *</label>
                   <input className="field" required placeholder="Aller Aqua" value={form.brand} onChange={(e) => update("brand", e.target.value)} />
+                  <p className="text-xs text-pond-200/60 mt-1">Keep the spelling consistent with opening stock and previous purchases.</p>
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Pellet Size (mm)</label>
                   <input className="field" min={0.1} step="0.1" type="number" placeholder="2" value={form.pelletSizeMm} onChange={(e) => update("pelletSizeMm", e.target.value)} />
+                  <p className="text-xs text-pond-200/60 mt-1">Enter pellet size when known so usage and low-stock alerts stay accurate.</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Bag Size (kg) *</label>
                   <input className="field" required min={0.1} step="0.1" type="number" placeholder="15" value={form.bagSizeKg} onChange={(e) => update("bagSizeKg", e.target.value)} />
+                  <p className="text-xs text-pond-200/60 mt-1">Use the printed bag size, not the estimated leftover amount.</p>
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Bags *</label>
                   <input className="field" required min={1} type="number" placeholder="1" value={form.bags} onChange={(e) => update("bags", e.target.value)} />
+                  <p className="text-xs text-pond-200/60 mt-1">Count only the bags received in this single purchase entry.</p>
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Unit Price (₦) *</label>
                   <input className="field" required min={0} type="number" placeholder="18500" value={form.unitPrice} onChange={(e) => update("unitPrice", e.target.value)} />
+                  <p className="text-xs text-pond-200/60 mt-1">Use price per bag so total cost is calculated consistently.</p>
                 </div>
               </div>
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Supplier</label>
                 <input className="field" placeholder="Chi Farms" value={form.supplier} onChange={(e) => update("supplier", e.target.value)} />
+                <p className="text-xs text-pond-200/60 mt-1">Supplier names help when comparing quality, pricing, or reorder patterns.</p>
               </div>
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Notes</label>
                 <textarea className="field resize-none" rows={2} placeholder="Juvenile feed for Batch A" value={form.notes} onChange={(e) => update("notes", e.target.value)} />
+                <p className="text-xs text-pond-200/60 mt-1">Use notes for context like intended batch, damaged bags, or special pricing.</p>
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => { setShowCreate(false); setCreateError(""); }} className="btn-secondary flex-1">Cancel</button>
@@ -634,24 +680,29 @@ export default function FeedInventoryPage() {
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Brand / Type *</label>
                   <input className="field" required placeholder="Aller Aqua" value={form.brand} onChange={(e) => update("brand", e.target.value)} />
+                  <p className="text-xs text-pond-200/60 mt-1">Keep the name aligned with your existing feed product labels.</p>
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Pellet Size (mm)</label>
                   <input className="field" min={0.1} step="0.1" type="number" placeholder="2" value={form.pelletSizeMm} onChange={(e) => update("pelletSizeMm", e.target.value)} />
+                  <p className="text-xs text-pond-200/60 mt-1">Correct pellet size here if the original entry was logged under the wrong product size.</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Bag Size (kg) *</label>
                   <input className="field" required min={0.1} step="0.1" type="number" placeholder="15" value={form.bagSizeKg} onChange={(e) => update("bagSizeKg", e.target.value)} />
+                  <p className="text-xs text-pond-200/60 mt-1">Update this only if the original purchase size was entered incorrectly.</p>
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Bags *</label>
                   <input className="field" required min={1} type="number" placeholder="1" value={form.bags} onChange={(e) => update("bags", e.target.value)} />
+                  <p className="text-xs text-pond-200/60 mt-1">Changing the bag count will change total purchased kilograms for this entry.</p>
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Unit Price (₦) *</label>
                   <input className="field" required min={0} type="number" placeholder="18500" value={form.unitPrice} onChange={(e) => update("unitPrice", e.target.value)} />
+                  <p className="text-xs text-pond-200/60 mt-1">Use the actual purchase price paid per bag for this entry.</p>
                 </div>
               </div>
               <div>

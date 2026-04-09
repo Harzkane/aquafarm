@@ -166,6 +166,7 @@ export default function FinancialsPage() {
     const roi = expenses > 0 ? ((net / expenses) * 100).toFixed(1) : "0.0";
     return { expenses, revenue, net, roi };
   }, [filteredTransactions]);
+  const scopeLabel = dateRange === "all" ? "All Time" : dateRange === "30d" ? "Last 30 Days" : "Last 90 Days";
 
   const pieData = useMemo(() => {
     const expByCategory: Record<string, number> = {};
@@ -376,11 +377,18 @@ export default function FinancialsPage() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="font-display text-2xl font-semibold text-pond-100">Financials</h1>
-          <p className="text-pond-200/75 text-sm mt-1">Track costs, revenue and profitability</p>
+          <p className="text-pond-200/75 text-sm mt-1">Track costs, sales, and profitability so each cycle is easier to judge clearly.</p>
         </div>
         <button className="btn-secondary" onClick={exportCSV}>
           <Download className="w-4 h-4" /> Export CSV
         </button>
+      </div>
+
+      <div className="rounded-xl border border-water-300/20 bg-[rgba(6,75,113,0.18)] px-4 py-3 text-sm text-pond-100">
+        <p className="font-medium">Quick guide</p>
+        <p className="mt-1 text-pond-200/75">
+          Use this page to compare money in, money out, and per-batch results over the same date range before deciding how the next cycle should run.
+        </p>
       </div>
 
       {error && (
@@ -406,6 +414,26 @@ export default function FinancialsPage() {
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-pond-300" />
           <input className="field pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search transactions" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="glass-card px-4 py-3">
+          <p className="text-xs text-pond-200/65 uppercase tracking-wider">Current Scope</p>
+          <p className="mt-2 text-2xl font-display text-pond-100">{scopeLabel}</p>
+          <p className="text-xs text-pond-200/65 mt-1">The active date filter for totals, charts, and transaction rows.</p>
+        </div>
+        <div className="glass-card px-4 py-3">
+          <p className="text-xs text-pond-200/65 uppercase tracking-wider">Transactions In View</p>
+          <p className="mt-2 text-2xl font-display text-pond-100">{filteredTransactions.length}</p>
+          <p className="text-xs text-pond-200/65 mt-1">Entries currently included after applying your filters.</p>
+        </div>
+        <div className="glass-card px-4 py-3">
+          <p className="text-xs text-pond-200/65 uppercase tracking-wider">Financial Position</p>
+          <p className={`mt-2 text-2xl font-display ${totals.net >= 0 ? "text-success" : "text-danger"}`}>
+            {totals.net >= 0 ? "Positive" : "Negative"}
+          </p>
+          <p className="text-xs text-pond-200/65 mt-1">Based on net result within the active scope.</p>
         </div>
       </div>
 

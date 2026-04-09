@@ -230,6 +230,7 @@ export default function CalendarPage() {
   const reminders = useMemo(() => allReminders.slice(0, 10), [allReminders]);
   const dueSoonCount = allReminders.filter((r) => r.status === "dueSoon").length;
   const overdueCount = allReminders.filter((r) => r.status === "overdue").length;
+  const upcomingCount = allReminders.filter((r) => r.status === "upcoming").length;
 
   if (loading) {
     return (
@@ -243,7 +244,7 @@ export default function CalendarPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-semibold text-pond-100">Production Calendar</h1>
-        <p className="text-pond-200/75 text-sm mt-1">Timeline, confirmed sorting checkpoints and harvest readiness</p>
+        <p className="text-pond-200/75 text-sm mt-1">Plan sorting and harvest work ahead of time so each batch stays on track and nothing important slips.</p>
       </div>
 
       {error && (
@@ -257,15 +258,29 @@ export default function CalendarPage() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h2 className="section-title !text-base">Upcoming Reminders</h2>
-            <p className="text-xs text-pond-200/70 mt-1">Next calendar actions for your active batches.</p>
+            <p className="text-xs text-pond-200/70 mt-1">The next planned actions for your active batches, based on stocking date and confirmed milestones.</p>
           </div>
           <div className="flex items-center gap-2">
             <span className="badge badge-amber text-xs">{dueSoonCount} due soon</span>
             <span className="badge badge-red text-xs">{overdueCount} overdue</span>
           </div>
         </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-pond-200/75">
+          <div className="rounded-xl border border-pond-700/30 bg-black/15 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Active Cycles</p>
+            <p>{activeBatchCount} batch{activeBatchCount === 1 ? "" : "es"} currently need calendar tracking.</p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/15 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Next Pressure Point</p>
+            <p>{overdueCount > 0 ? `${overdueCount} reminder${overdueCount > 1 ? "s are" : " is"} overdue.` : dueSoonCount > 0 ? `${dueSoonCount} reminder${dueSoonCount > 1 ? "s are" : " is"} due soon.` : "No urgent calendar actions right now."}</p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/15 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Planning Window</p>
+            <p>{upcomingCount > 0 ? `${upcomingCount} upcoming reminder${upcomingCount > 1 ? "s are" : " is"} already visible so you can prepare ahead.` : "New upcoming reminders will appear as batches move through the cycle."}</p>
+          </div>
+        </div>
         {reminders.length === 0 ? (
-          <p className="text-sm text-pond-200/70">No pending reminders. You are up to date.</p>
+          <p className="text-sm text-pond-200/70">No pending reminders. Your current production calendar is up to date.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
             {reminders.map((item) => (
@@ -299,7 +314,7 @@ export default function CalendarPage() {
         <div className="glass-card p-16 text-center">
           <Calendar className="w-12 h-12 text-pond-500 mx-auto mb-4 opacity-40" />
           <h3 className="font-display text-lg text-pond-200 mb-2">No batches to display</h3>
-          <p className="text-pond-200/75 text-sm">Create a batch first to see your production calendar</p>
+          <p className="text-pond-200/75 text-sm">Create a batch first to start seeing sort checkpoints, harvest timing, and planning reminders.</p>
         </div>
       ) : (
         batches.map((batch) => {
@@ -341,6 +356,7 @@ export default function CalendarPage() {
                 <div>
                   <h2 className="font-display text-lg text-pond-100">{batch.name}</h2>
                   <p className="text-xs text-pond-200/75">Started {format(stockDate, "d MMM yyyy")} · Currently Week {weeks} · {phase}</p>
+                  <p className="text-[11px] text-pond-200/60 mt-1">Use this timeline to confirm completed sorts and see what should happen next.</p>
                 </div>
                 <span className="sm:ml-auto badge badge-green shrink-0 whitespace-nowrap">Week {weeks} / 18</span>
               </div>
@@ -433,6 +449,7 @@ export default function CalendarPage() {
                                   {eventBusyKey === key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Undo"}
                                 </button>
                               )}
+                              <p className="text-[11px] text-pond-200/55">Only confirm sorts that have actually been completed on the farm.</p>
                             </div>
                           )}
                         </div>

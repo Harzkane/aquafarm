@@ -286,6 +286,9 @@ export default function MortalityPage() {
     byTank[tank] = (byTank[tank] || 0) + Number(l.mortality || 0);
     byCause[cause] = (byCause[cause] || 0) + Number(l.mortality || 0);
   });
+  const topTank = Object.entries(byTank).sort((a, b) => b[1] - a[1])[0];
+  const topCause = Object.entries(byCause).sort((a, b) => b[1] - a[1])[0];
+  const avgDeathsPerIncident = filteredLogs.length > 0 ? totalDeaths / filteredLogs.length : 0;
 
   if (loading) {
     return (
@@ -299,7 +302,7 @@ export default function MortalityPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-semibold text-pond-100">Mortality Log</h1>
-        <p className="text-pond-200/75 text-sm mt-1">Track and analyse fish deaths to improve survival rate</p>
+        <p className="text-pond-200/75 text-sm mt-1">Review mortality patterns early so you can spot tank issues, likely causes, and rising losses before they spread.</p>
       </div>
 
       {isFreePlan ? (
@@ -326,23 +329,23 @@ export default function MortalityPage() {
       )}
 
       <div className="glass-card p-4 grid grid-cols-1 md:grid-cols-5 gap-3">
-        <select className="field" value={dateRange} onChange={(e) => setDateRange(e.target.value as any)}>
+        <select className="field" aria-label="Filter mortality by date range" value={dateRange} onChange={(e) => setDateRange(e.target.value as any)}>
           <option value="7d">Last 7 days</option>
           <option value="30d">Last 30 days</option>
           {!isFreePlan ? <option value="90d">Last 90 days</option> : null}
           {!isFreePlan ? <option value="all">All time</option> : null}
         </select>
-        <select className="field" value={batchFilter} onChange={(e) => setBatchFilter(e.target.value)}>
+        <select className="field" aria-label="Filter mortality by batch" value={batchFilter} onChange={(e) => setBatchFilter(e.target.value)}>
           <option value="all">All batches</option>
           {batches.map((b) => <option key={b._id} value={b._id}>{b.name}</option>)}
         </select>
-        <select className="field" value={causeFilter} onChange={(e) => setCauseFilter(e.target.value)}>
+        <select className="field" aria-label="Filter mortality by cause" value={causeFilter} onChange={(e) => setCauseFilter(e.target.value)}>
           <option value="all">All causes</option>
           {CAUSES.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         <div className="relative md:col-span-2">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-pond-300" />
-          <input className="field pl-9" placeholder="Search cause, tank, note, date" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input className="field pl-9" aria-label="Search mortality records" placeholder="Search cause, tank, note, date" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
       </div>
 
@@ -357,19 +360,40 @@ export default function MortalityPage() {
         </div>
         <div className="stat-card">
           <p className="text-xs text-pond-200/75 uppercase tracking-wider mb-2">Worst Tank</p>
-          <p className="font-mono text-sm font-semibold text-mud-300">{Object.entries(byTank).sort((a, b) => b[1] - a[1])[0]?.[0] || "—"}</p>
+          <p className="font-mono text-sm font-semibold text-mud-300">{topTank?.[0] || "—"}</p>
         </div>
         <div className="stat-card">
           <p className="text-xs text-pond-200/75 uppercase tracking-wider mb-2">Top Cause</p>
-          <p className="font-mono text-sm font-semibold text-mud-300 capitalize">{Object.entries(byCause).sort((a, b) => b[1] - a[1])[0]?.[0] || "—"}</p>
+          <p className="font-mono text-sm font-semibold text-mud-300 capitalize">{topCause?.[0] || "—"}</p>
+        </div>
+      </div>
+
+      <div className="glass-card p-5 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h2 className="section-title !text-base">Mortality Guide</h2>
+          <p className="text-xs text-pond-200/65">Use this page to investigate patterns, not just count losses</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-pond-200/75">
+          <div className="rounded-xl border border-pond-700/30 bg-black/15 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Current Pattern</p>
+            <p>{filteredLogs.length > 0 ? `${avgDeathsPerIncident.toFixed(1)} average deaths per incident in the current view.` : "No mortality incidents in the current view."}</p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/15 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Highest Risk Area</p>
+            <p>{topTank ? `${topTank[0]} has the highest losses in this filter.` : "No tank pattern yet."}</p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/15 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Logging Habit</p>
+            <p>Record the likely cause and any observations while the issue is fresh so later review stays useful.</p>
+          </div>
         </div>
       </div>
 
       {filteredLogs.length === 0 ? (
         <div className="glass-card p-16 text-center">
           <Skull className="w-12 h-12 text-pond-500 mx-auto mb-4 opacity-30" />
-          <h3 className="font-display text-lg text-pond-200 mb-2">No mortality recorded 🎉</h3>
-          <p className="text-pond-200/75 text-sm">Great sign — keep your water quality and sorting on track</p>
+          <h3 className="font-display text-lg text-pond-200 mb-2">No mortality recorded</h3>
+          <p className="text-pond-200/75 text-sm">That is a strong sign. Keep water quality, feeding, and sorting routines consistent.</p>
         </div>
       ) : (
         <div className="glass-card overflow-hidden">
@@ -492,6 +516,7 @@ export default function MortalityPage() {
                     <option value="">Select batch…</option>
                     {batches.map((b) => <option key={b._id} value={b._id}>{b.name}</option>)}
                   </select>
+                  <p className="text-xs text-pond-200/60 mt-1">Keep the event attached to the correct batch so survival history stays accurate.</p>
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Session</label>
@@ -499,6 +524,7 @@ export default function MortalityPage() {
                     <option value="morning">Morning</option>
                     <option value="evening">Evening</option>
                   </select>
+                  <p className="text-xs text-pond-200/60 mt-1">Use the session that best matches when the deaths were observed or confirmed.</p>
                 </div>
               </div>
 
@@ -508,10 +534,12 @@ export default function MortalityPage() {
                   <select className="field" value={editForm.tankName} onChange={(e) => setEditForm((f) => ({ ...f, tankName: e.target.value }))}>
                     {availableEditTankNames.map((t) => <option key={t}>{t}</option>)}
                   </select>
+                  <p className="text-xs text-pond-200/60 mt-1">Use All Tanks only when the losses cannot be tied to one tank confidently.</p>
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Deaths</label>
                   <input className="field" type="number" min={0} placeholder="12" value={editForm.mortality} onChange={(e) => setEditForm((f) => ({ ...f, mortality: e.target.value }))} />
+                  <p className="text-xs text-pond-200/60 mt-1">This value affects live batch totals, so use the confirmed death count.</p>
                 </div>
               </div>
 
@@ -520,11 +548,13 @@ export default function MortalityPage() {
                 <select className="field" value={editForm.mortalityCause} onChange={(e) => setEditForm((f) => ({ ...f, mortalityCause: e.target.value }))}>
                   {CAUSES.map((c) => <option key={c}>{c}</option>)}
                 </select>
+                <p className="text-xs text-pond-200/60 mt-1">Pick the most likely cause now, even if you plan to investigate further later.</p>
               </div>
 
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Observations</label>
                 <textarea className="field resize-none" rows={2} placeholder="Found floating fish near outlet pipe" value={editForm.observations} onChange={(e) => setEditForm((f) => ({ ...f, observations: e.target.value }))} />
+                <p className="text-xs text-pond-200/60 mt-1">Short notes like smell, behavior, weather, or water color make later diagnosis much easier.</p>
               </div>
 
               <div className="flex gap-3 pt-2">

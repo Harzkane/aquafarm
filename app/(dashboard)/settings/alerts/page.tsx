@@ -76,7 +76,7 @@ export default function AlertChannelsSettingsPage() {
       <div>
         <h1 className="font-display text-2xl font-semibold text-pond-100">Alert Channels</h1>
         <p className="mt-1 text-sm text-pond-200/75">
-          Configure outbound delivery for critical alerts.
+          Decide who receives critical alerts and how the platform should route them when fast attention is needed.
         </p>
       </div>
 
@@ -95,6 +95,20 @@ export default function AlertChannelsSettingsPage() {
         <p className="text-xs text-pond-200/65">
           WhatsApp is the only active outbound channel right now. Additional channels will appear here once delivery is live.
         </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-pond-200/75">
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Current Channel</p>
+            <p>Critical alerts can currently route through WhatsApp when enabled below.</p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Fallback Behavior</p>
+            <p>If no phone is saved here, the system falls back to the configured environment recipient.</p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Best Practice</p>
+            <p>Use a monitored operations number so urgent issues are seen even when one team member is offline.</p>
+          </div>
+        </div>
 
         <div>
           <label className="mb-1.5 block text-xs font-medium text-pond-300">WhatsApp recipient phone</label>
@@ -107,6 +121,9 @@ export default function AlertChannelsSettingsPage() {
           <p className="mt-1 text-xs text-pond-200/65">
             E.164 format recommended. If empty, dispatcher uses env fallback (`ALERTS_WHATSAPP_TO`).
           </p>
+          <p className="mt-1 text-xs text-pond-200/55">
+            Example: `2348012345678` for a Nigerian number without spaces, brackets, or a leading zero.
+          </p>
         </div>
 
         <label className="flex items-center gap-2 text-sm text-pond-200">
@@ -117,6 +134,9 @@ export default function AlertChannelsSettingsPage() {
           />
           Send critical alerts via WhatsApp
         </label>
+        <p className="-mt-2 text-xs text-pond-200/60">
+          Turn this off only if you want critical alerts to stay in-product for now.
+        </p>
 
         <button type="submit" className="btn-primary" disabled={saving}>
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}

@@ -129,6 +129,7 @@ export default function HarvestPage() {
     }
     return Object.values(map).sort((a, b) => b.revenue - a.revenue);
   }, [visibleRows]);
+  const avgWeightPerFish = filteredTotals.fishSold > 0 ? filteredTotals.weightKg / filteredTotals.fishSold : 0;
   const salesTotalPages = Math.max(1, Math.ceil(visibleRows.length / salesPageSize));
   const salesPageStart = visibleRows.length === 0 ? 0 : (salesPage - 1) * salesPageSize + 1;
   const salesPageEnd = Math.min(visibleRows.length, salesPage * salesPageSize);
@@ -262,7 +263,7 @@ export default function HarvestPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-semibold text-pond-100">Harvest & Sales</h1>
-        <p className="text-pond-200/75 text-sm mt-1">Log harvest output and sales revenue by batch</p>
+        <p className="text-pond-200/75 text-sm mt-1">Track harvest output, buyer activity, and revenue with a clean record for each batch.</p>
       </div>
 
       {error && <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10">{error}</div>}
@@ -288,6 +289,27 @@ export default function HarvestPage() {
         </div>
       </div>
 
+      <div className="glass-card p-5 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h2 className="section-title !text-base">Harvest Guide</h2>
+          <p className="text-xs text-pond-200/65">Log once the sale is confirmed</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-pond-200/75">
+          <div className="rounded-xl border border-pond-700/30 bg-black/15 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Current Scope</p>
+            <p>{batchFilter === "all" ? "All batches are included in this view." : `Showing sales for ${rows.find((row) => row.batchId === batchFilter)?.batchName || "the selected batch"}.`}</p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/15 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Average Size</p>
+            <p>{avgWeightPerFish > 0 ? `${avgWeightPerFish.toFixed(2)}kg per fish in the current view.` : "Add fish sold and weight to monitor average harvest size."}</p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/15 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Stock Safety</p>
+            <p>Once a sale updates live stock, fish sold and batch assignment stay locked to protect your records.</p>
+          </div>
+        </div>
+      </div>
+
       <div className="glass-card p-5 space-y-4">
         <h2 className="section-title !text-base">Record Harvest Sale</h2>
         <form onSubmit={submit} className="space-y-3">
@@ -302,6 +324,7 @@ export default function HarvestPage() {
                   </option>
                 ))}
               </select>
+              <p className="text-xs text-pond-200/60 mt-1">Choose the batch the harvested fish came from. Only active batches are available here.</p>
             </div>
             <div>
               <label className="block text-xs text-pond-300 mb-1.5 font-medium">Harvest Date</label>
@@ -316,20 +339,24 @@ export default function HarvestPage() {
             <div>
               <label className="block text-xs text-pond-300 mb-1.5 font-medium">Fish Sold</label>
               <input className="field" type="number" min={0} placeholder="420" value={form.fishSold} onChange={(e) => update("fishSold", e.target.value)} />
+              <p className="text-xs text-pond-200/60 mt-1">Enter the actual number sold if you counted fish. Leave blank if you only tracked weight.</p>
             </div>
             <div>
               <label className="block text-xs text-pond-300 mb-1.5 font-medium">Weight (kg) *</label>
               <input className="field" type="number" min={0.1} step="0.1" required placeholder="850" value={form.weightKg} onChange={(e) => update("weightKg", e.target.value)} />
+              <p className="text-xs text-pond-200/60 mt-1">Use the delivered or confirmed sale weight so revenue stays accurate.</p>
             </div>
             <div>
               <label className="block text-xs text-pond-300 mb-1.5 font-medium">Price/kg (₦) *</label>
               <input className="field" type="number" min={0} required placeholder="2200" value={form.pricePerKg} onChange={(e) => update("pricePerKg", e.target.value)} />
+              <p className="text-xs text-pond-200/60 mt-1">Record the final agreed price per kilogram, not the expected asking price.</p>
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-pond-300 mb-1.5 font-medium">Buyer</label>
               <input className="field" placeholder="Kubwa Fish Market" value={form.buyer} onChange={(e) => update("buyer", e.target.value)} />
+              <p className="text-xs text-pond-200/60 mt-1">Buyer names make it easier to follow repeat customers and trace each sale later.</p>
             </div>
             <div>
               <label className="block text-xs text-pond-300 mb-1.5 font-medium">Channel</label>
@@ -341,21 +368,23 @@ export default function HarvestPage() {
                 <option value="hotel">Hotel</option>
                 <option value="other">Other</option>
               </select>
+              <p className="text-xs text-pond-200/60 mt-1">Use one sales channel consistently so your channel breakdown stays meaningful.</p>
             </div>
           </div>
           <label className="flex items-center gap-2 text-xs text-pond-300 cursor-pointer">
             <input type="checkbox" checked={form.markBatchHarvested} onChange={(e) => update("markBatchHarvested", e.target.checked)} />
             Mark selected batch as fully harvested
           </label>
+          <p className="text-xs text-pond-200/60 -mt-1">Only check this when the batch is fully cleared. Partial sales should stay open for future harvest records.</p>
           <button type="submit" disabled={saving} className="btn-primary">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            {saving ? "Saving..." : "Save Harvest"}
+            {saving ? "Saving..." : "Save Harvest Sale"}
           </button>
         </form>
       </div>
 
       <div className="glass-card p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-        <select className="field" value={batchFilter} onChange={(e) => setBatchFilter(e.target.value)}>
+        <select className="field" aria-label="Filter harvest sales by batch" value={batchFilter} onChange={(e) => setBatchFilter(e.target.value)}>
           <option value="all">All batches</option>
           {Array.from(new Set(rows.map((r) => r.batchId))).map((id) => {
             const label = rows.find((r) => r.batchId === id)?.batchName || id;
@@ -378,7 +407,7 @@ export default function HarvestPage() {
           <p className="text-xs text-pond-200/65">{channelBreakdown.length} channels</p>
         </div>
         {channelBreakdown.length === 0 ? (
-          <p className="text-sm text-pond-200/70">No channel data yet.</p>
+          <p className="text-sm text-pond-200/70">No channel data yet. Start with one logged sale and this view will show where revenue is coming from.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {channelBreakdown.map((channel) => (
@@ -402,7 +431,8 @@ export default function HarvestPage() {
         {visibleRows.length === 0 ? (
           <div className="p-12 text-center">
             <ShoppingBasket className="w-10 h-10 text-pond-500 mx-auto mb-3 opacity-40" />
-            <p className="text-pond-200/65 text-sm">No harvest records for current filter</p>
+            <p className="text-pond-200/65 text-sm">No harvest records for the current filter.</p>
+            <p className="text-pond-200/55 text-xs mt-2">Your first sale here will flow into reports and financial performance automatically.</p>
           </div>
         ) : (
           <>

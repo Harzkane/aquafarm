@@ -184,11 +184,19 @@ export default function DashboardClient({
     : (tankHealthTrend.all[activeTimeframe] || []);
   const scopedChartData = scope.chartDataByRange[activeTimeframe] || [];
   const timeframeLabel = `Last ${activeTimeframe} Days`;
+  const firstName = userName.split(" ")[0] || "there";
 
   const visibleActions = (isFree
     ? actions.filter((a) => !FREE_LOCKED_ACTION_PREFIXES.some((prefix) => a.href.startsWith(prefix)))
     : actions
   ).slice(0, 4);
+  const urgentCount = visibleActions.filter((action) => action.level === "danger" || action.level === "warning").length;
+  const todaySummary =
+    batches.length === 0
+      ? "Set up your first batch to start building a reliable operating record."
+      : urgentCount > 0
+        ? `${urgentCount} item${urgentCount === 1 ? "" : "s"} need attention today.`
+        : "No urgent issues detected right now. Keep logging consistently.";
 
   const kpis = isFree ? [
     {
@@ -270,9 +278,10 @@ export default function DashboardClient({
       <div className="flex items-start justify-between">
         <div>
           <h1 className="font-display text-2xl lg:text-3xl font-semibold text-pond-100">
-            Good morning, {userName.split(" ")[0]} 👋
+            Good morning, {firstName} 👋
           </h1>
-          <p className="text-pond-400/70 text-sm mt-1">{farmName} · Abuja, Nigeria</p>
+          <p className="text-pond-400/70 text-sm mt-1">{farmName}</p>
+          <p className="text-pond-200/65 text-sm mt-2 max-w-2xl">{todaySummary}</p>
         </div>
         <div className="hidden sm:flex items-center gap-2">
           <CurrentPlanBadge />
@@ -294,7 +303,7 @@ export default function DashboardClient({
         <div className="glass-card p-5 space-y-3">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-warning" />
-            <h2 className="section-title !text-base">Action Required</h2>
+            <h2 className="section-title !text-base">Needs Attention</h2>
           </div>
           <div className="space-y-2.5">
             {visibleActions.map((action, i) => (
@@ -325,13 +334,13 @@ export default function DashboardClient({
       <div className="glass-card p-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-3">
           <div>
-            <h2 className="section-title !text-base">Dashboard Scope</h2>
+            <h2 className="section-title !text-base">Current View</h2>
             <p className="text-xs text-pond-200/65 mt-1">
-              Cards and charts are showing <span className="text-pond-100 font-medium">{scopeLabel}</span>.
+              Cards and charts below are showing <span className="text-pond-100 font-medium">{scopeLabel}</span>.
             </p>
           </div>
           <div>
-            <p className="text-xs text-pond-300 mb-1.5 font-medium">Chart Timeframe</p>
+            <p className="text-xs text-pond-300 mb-1.5 font-medium">Timeframe</p>
             <div className="flex flex-wrap gap-2">
               {timeframeOptions.map((option) => {
                 const active = activeTimeframe === option.value;
@@ -356,7 +365,7 @@ export default function DashboardClient({
           </div>
         </div>
         <div className="w-full sm:w-72">
-          <label className="block text-xs text-pond-300 mb-1.5 font-medium">View Batch</label>
+          <label className="block text-xs text-pond-300 mb-1.5 font-medium">Batch Filter</label>
           <select className="field" value={selectedBatchId} onChange={(e) => setSelectedBatchId(e.target.value)}>
             <option value="all">All Farm</option>
             {batches.map((batch: any) => (
@@ -411,7 +420,7 @@ export default function DashboardClient({
             <h2 className="section-title mb-4">Tank Highlights</h2>
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="rounded-xl p-3" style={{ background: "rgba(12, 12, 14,0.5)", border: "1px solid rgba(148, 163, 184,0.12)" }}>
-                <p className="text-xs text-pond-200/65 uppercase tracking-wider">Most Stocked</p>
+                <p className="text-xs text-pond-200/65 uppercase tracking-wider">Most Loaded</p>
                 <p className="text-sm text-pond-100 font-medium mt-1">{busiestTank?.tankName || "—"}</p>
                 <p className="text-xs text-pond-300 mt-1">{Number(busiestTank?.currentFish || 0).toLocaleString()} fish</p>
               </div>
@@ -659,7 +668,7 @@ export default function DashboardClient({
         <div className="glass-card p-12 text-center">
           <Fish className="w-12 h-12 text-pond-500 mx-auto mb-4 opacity-50" />
           <h3 className="font-display text-lg text-pond-200 mb-2">No active batches yet</h3>
-          <p className="text-pond-200/75 text-sm mb-6">Start your first batch to begin tracking your catfish farm</p>
+          <p className="text-pond-200/75 text-sm mb-6">Start your first batch to begin building a clear operating record for the farm.</p>
           <a href="/batches" className="btn-primary inline-flex">
             <Package className="w-4 h-4" /> Create First Batch
           </a>

@@ -21,9 +21,21 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AquaFarm — Catfish Farm Management",
-  description: "Professional catfish farming tracker for Nigerian aquaculture",
+  title: "AquaFarm | Catfish Farm Operating System",
+  description: "AquaFarm helps catfish farms in Nigeria manage feeding, mortality, water quality, harvest, and cycle performance in one clear operating record.",
   manifest: "/manifest.json",
+  openGraph: {
+    title: "AquaFarm | Catfish Farm Operating System",
+    description:
+      "Run your fish farm with tighter daily control using one record for feeding, mortality, water quality, harvest, and cycle performance.",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "AquaFarm | Catfish Farm Operating System",
+    description:
+      "Built for catfish farms that want tighter daily control and fewer preventable losses.",
+  },
 };
 
 export const viewport: Viewport = {

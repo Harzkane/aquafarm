@@ -97,7 +97,7 @@ export default function StaffAccessPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-semibold text-pond-100">Staff Access</h1>
-        <p className="mt-1 text-sm text-pond-200/75">Commercial owners can create staff logins for the same farm workspace.</p>
+        <p className="mt-1 text-sm text-pond-200/75">Create team logins for the same farm workspace so staff can work inside the product without sharing the owner account.</p>
         <p className="mt-1 text-xs text-pond-300">Staff seats used: {staff.length}/{maxStaffUsers}</p>
       </div>
 
@@ -107,6 +107,20 @@ export default function StaffAccessPage() {
 
       <section className="glass-card p-5">
         <h2 className="text-lg font-semibold text-pond-100">Add Staff User</h2>
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-pond-200/75">
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Seat Usage</p>
+            <p>{staff.length} of {maxStaffUsers} available staff seats are currently in use.</p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Access Model</p>
+            <p>Staff work inside the same farm workspace, so everyone sees the same operating data.</p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Best Practice</p>
+            <p>Create one login per person so actions and accountability stay clear as the team grows.</p>
+          </div>
+        </div>
         {staffLimitReached ? (
           <div className="mt-3 rounded-xl border border-amber-400/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
             Staff seat limit reached ({maxStaffUsers}). Remove a staff user to add another.
@@ -145,6 +159,11 @@ export default function StaffAccessPage() {
             {saving ? "Creating..." : "Add Staff"}
           </button>
         </form>
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-pond-200/65">
+          <p>Name should match the person who will actually use the login.</p>
+          <p>Use a real email the staff member can remember and access consistently.</p>
+          <p>Passwords should be temporary but strong, then changed later if your workflow requires it.</p>
+        </div>
       </section>
 
       <section className="glass-card overflow-hidden">
@@ -153,7 +172,10 @@ export default function StaffAccessPage() {
           <p className="text-xs text-pond-200/65">{staff.length} users</p>
         </div>
         {staff.length === 0 ? (
-          <div className="p-8 text-sm text-pond-200/70 text-center">No staff users yet.</div>
+          <div className="p-8 text-sm text-pond-200/70 text-center">
+            No staff users yet.
+            <p className="mt-2 text-xs text-pond-200/55">Add your first teammate here when someone else needs direct access to farm operations.</p>
+          </div>
         ) : (
           <div className="divide-y divide-pond-700/20">
             {staff.map((user) => (
@@ -205,6 +227,9 @@ export default function StaffAccessPage() {
             </p>
             <p className="text-xs text-pond-200/65">
               They will lose access immediately and will need to be added again to sign in later.
+            </p>
+            <p className="text-xs text-pond-200/55">
+              This does not delete farm records. It only removes that user’s access to the shared workspace.
             </p>
             <div className="rounded-xl border border-pond-700/20 bg-black/20 px-4 py-3">
               <p className="text-sm text-pond-100">{staffToRemove.name}</p>

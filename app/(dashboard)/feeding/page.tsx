@@ -374,6 +374,16 @@ export default function FeedingPage() {
     setPage((p) => Math.min(p, totalPages));
   }, [totalPages]);
 
+  const todayLogCount = useMemo(
+    () => logs.filter((log) => new Date(log.date).toDateString() === new Date().toDateString()).length,
+    [logs],
+  );
+  const recentMortalityCount = useMemo(
+    () => logs.reduce((sum, log) => sum + Number(log.mortality || 0), 0),
+    [logs],
+  );
+  const activeBatchCount = batches.length;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -387,11 +397,31 @@ export default function FeedingPage() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="font-display text-2xl font-semibold text-pond-100">Daily Log</h1>
-          <p className="text-pond-200/75 text-sm mt-1">Record today&apos;s feeding, water quality and any mortality</p>
+          <p className="text-pond-200/75 text-sm mt-1">Record feeding, water quality, and mortality in one daily routine.</p>
         </div>
         <button onClick={() => { setEntryError(""); setShowEntryForm(true); }} className="btn-primary">
-          <Plus className="w-4 h-4" /> Today&apos;s Entry
+          <Plus className="w-4 h-4" /> Add Today&apos;s Entry
         </button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="glass-card px-4 py-3">
+          <p className="text-xs text-pond-200/65 uppercase tracking-wider">Entries Today</p>
+          <p className="mt-2 text-2xl font-display text-pond-100">{todayLogCount}</p>
+          <p className="text-xs text-pond-200/65 mt-1">Logs recorded for today&apos;s farm activity.</p>
+        </div>
+        <div className="glass-card px-4 py-3">
+          <p className="text-xs text-pond-200/65 uppercase tracking-wider">Active Batches</p>
+          <p className="mt-2 text-2xl font-display text-pond-100">{activeBatchCount}</p>
+          <p className="text-xs text-pond-200/65 mt-1">Batches available to log against right now.</p>
+        </div>
+        <div className="glass-card px-4 py-3">
+          <p className="text-xs text-pond-200/65 uppercase tracking-wider">Deaths In View</p>
+          <p className={`mt-2 text-2xl font-display ${recentMortalityCount > 0 ? "text-danger" : "text-pond-100"}`}>
+            {recentMortalityCount.toLocaleString()}
+          </p>
+          <p className="text-xs text-pond-200/65 mt-1">Across the entries currently loaded on this page.</p>
+        </div>
       </div>
 
       {isFreePlan ? (
@@ -416,7 +446,7 @@ export default function FeedingPage() {
 
       <div className="space-y-3">
           <div className="glass-card p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-            <select className="field" value={batchFilter} onChange={(e) => setBatchFilter(e.target.value)}>
+            <select aria-label="Filter by batch" className="field" value={batchFilter} onChange={(e) => setBatchFilter(e.target.value)}>
               <option value="all">All batches</option>
               {batches.map((b) => <option key={b._id} value={b._id}>{b.name}</option>)}
             </select>
@@ -429,6 +459,7 @@ export default function FeedingPage() {
           <div className="glass-card overflow-hidden">
             <div className="px-5 py-4 border-b border-pond-700/20">
               <h2 className="section-title">Recent Entries</h2>
+              <p className="text-xs text-pond-200/65 mt-1">Review what has already been logged, then edit or correct entries when needed.</p>
             </div>
             {visibleLogs.length === 0 ? (
               <div className="p-12 text-center">
@@ -581,6 +612,7 @@ export default function FeedingPage() {
                   <select className="field" value={form.tankName} onChange={(e) => update("tankName", e.target.value)}>
                     {availableTankNames.map((t) => <option key={t}>{t}</option>)}
                   </select>
+                  <p className="text-[11px] text-pond-200/60 mt-1">Use “All Tanks” only when the entry applies to the whole batch.</p>
                 </div>
               </div>
               <div>
@@ -595,6 +627,7 @@ export default function FeedingPage() {
                 <p className="text-xs font-medium text-pond-300 flex items-center gap-1.5">
                   <Droplets className="w-3.5 h-3.5" /> Feeding
                 </p>
+                <p className="text-[11px] text-pond-200/60">Record what was actually given in this session, not the planned amount.</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>
                     <label className="block text-xs text-pond-200/75 mb-1">Feed Given (kg)</label>
@@ -642,6 +675,7 @@ export default function FeedingPage() {
                 <p className="text-xs font-medium text-water-300 flex items-center gap-1.5">
                   <ThermometerSun className="w-3.5 h-3.5" /> Water Quality
                 </p>
+                <p className="text-[11px] text-pond-200/60">These values are optional, but logging them consistently makes alerts and trends more useful.</p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
                     <label className="block text-xs text-pond-200/75 mb-1">pH</label>
@@ -670,6 +704,7 @@ export default function FeedingPage() {
                 <p className="text-xs font-medium text-red-300 flex items-center gap-1.5">
                   <Skull className="w-3.5 h-3.5" /> Mortality
                 </p>
+                <p className="text-[11px] text-pond-200/60">If there were no deaths, leave this at 0 or blank and continue.</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-pond-200/75 mb-1">Deaths today</label>

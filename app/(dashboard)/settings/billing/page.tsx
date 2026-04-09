@@ -233,7 +233,7 @@ function BillingContent() {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="font-display text-2xl font-semibold text-pond-100">Billing</h1>
-          <p className="mt-1 text-sm text-pond-200/75">Manage your plan and subscription status.</p>
+          <p className="mt-1 text-sm text-pond-200/75">Review your current plan, subscription status, and support level without losing sight of what changes now versus later.</p>
         </div>
         <div className="flex items-center gap-2">
           {refreshingStatus ? <Loader2 className="h-4 w-4 animate-spin text-pond-300" /> : null}
@@ -258,6 +258,27 @@ function BillingContent() {
         </div>
       ) : null}
 
+      <section className="glass-card p-5 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h2 className="section-title !text-base">Billing Guide</h2>
+          <p className="text-xs text-pond-200/65">Use this page to understand the impact of plan changes before acting</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-pond-200/75">
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Recommended Path</p>
+            <p>Cancel auto-renew if you want to stop future billing while keeping the rest of the current paid period.</p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Immediate Change</p>
+            <p>Downgrade now only when you want paid access removed immediately, not at the end of the billing period.</p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Owner Control</p>
+            <p>Only the account owner can change billing, but staff can still view plan details and operational limits here.</p>
+          </div>
+        </div>
+      </section>
+
       <section className="glass-card p-5">
         <p className="text-xs uppercase tracking-wider text-pond-200/70">Current Plan</p>
         <div className="mt-2 flex items-center gap-2">
@@ -278,6 +299,9 @@ function BillingContent() {
             Auto-renew canceled. Downgrade to Free is scheduled at period end.
           </p>
         ) : null}
+        <p className="mt-3 text-xs text-pond-200/65">
+          Limits below describe what this plan allows right now. Operational data already recorded in your farm workspace is not erased by viewing or comparing plans here.
+        </p>
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div className="rounded-xl border border-pond-700/30 bg-black/20 px-3 py-2">
             <p className="text-xs text-pond-200/65">Active batch limit</p>
@@ -331,6 +355,9 @@ function BillingContent() {
           <h2 className="text-lg font-semibold text-pond-100">Success Program</h2>
           <p className="mt-1 text-sm text-pond-200/75">
             Track dedicated onboarding and monthly check-ins for Commercial accounts.
+          </p>
+          <p className="mt-2 text-xs text-pond-200/65">
+            This section is for account management and relationship tracking. It does not change production records or farm logs.
           </p>
 
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -440,6 +467,9 @@ function BillingContent() {
           <p className="mt-1 text-sm text-pond-200/75">
             Recommended: cancel auto-renew and keep your paid access until the current period ends.
           </p>
+          <p className="mt-2 text-xs text-pond-200/65">
+            These controls affect subscription access and billing status only. They do not delete batches, tanks, logs, harvests, or financial records.
+          </p>
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <button
               type="button"
@@ -481,6 +511,7 @@ function BillingContent() {
           <h3 className="mt-1 text-lg font-semibold text-pond-100">Pro Founder</h3>
           <p className="mt-1 text-sm text-pond-200/70">₦5,000 / month</p>
           {isCurrentPlan("pro") ? <p className="mt-1 text-xs text-emerald-300">Current plan</p> : null}
+          <p className="mt-2 text-xs text-pond-200/65">Best for owner-led farms that need more operating room and better support without team seats yet.</p>
           <ul className="mt-4 space-y-2 text-sm text-pond-200/80">
             {PLAN_CARD_DETAILS.pro.map((item) => (
               <li key={item}>• {item}</li>
@@ -502,6 +533,7 @@ function BillingContent() {
           <h3 className="mt-1 text-lg font-semibold text-pond-100">Pro+ Commercial</h3>
           <p className="mt-1 text-sm text-pond-200/70">₦15,000 / month</p>
           {isCurrentPlan("commercial") ? <p className="mt-1 text-xs text-emerald-300">Current plan</p> : null}
+          <p className="mt-2 text-xs text-pond-200/65">Best for farms running with staff, repeat check-ins, and a more structured operating workflow.</p>
           <ul className="mt-4 space-y-2 text-sm text-pond-200/80">
             {PLAN_CARD_DETAILS.commercial.map((item) => (
               <li key={item}>• {item}</li>
@@ -534,6 +566,9 @@ function BillingContent() {
             <p className="mt-1 text-sm text-pond-200/80">{confirmMeta.price}</p>
             <p className="mt-3 text-sm text-pond-200/75">
               You will be redirected to Paystack to complete payment securely.
+            </p>
+            <p className="mt-2 text-xs text-pond-200/65">
+              Your farm data stays in the same workspace. This only changes billing and plan access after successful payment.
             </p>
 
             <div className="mt-5 flex flex-col gap-2 sm:flex-row">
@@ -576,6 +611,9 @@ function BillingContent() {
               {confirmCancelMode === "cancel"
                 ? "Recurring billing will be disabled at Paystack. Your current paid access stays active until period end."
                 : "Recurring billing will be disabled at Paystack and this account will be downgraded to Free immediately."}
+            </p>
+            <p className="mt-2 text-xs text-pond-200/65">
+              This action changes subscription access, not the underlying farm records already stored in AquaFarm.
             </p>
             <div className="mt-5 flex flex-col gap-2 sm:flex-row">
               <button

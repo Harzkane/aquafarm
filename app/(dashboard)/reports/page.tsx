@@ -114,6 +114,7 @@ export default function ReportsPage() {
     if (summary.net === 0) return "Break-even";
     return "Investment phase";
   }, [summary]);
+  const reportScopeLabel = range === "all" ? "All Time" : range.toUpperCase();
 
   async function exportCsv() {
     if (!canExport) return;
@@ -161,7 +162,7 @@ export default function ReportsPage() {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="font-display text-2xl font-semibold text-pond-100">Reports</h1>
-          <p className="text-pond-200/75 text-sm mt-1">Cross-module performance snapshot (production, health, finances, feed)</p>
+          <p className="text-pond-200/75 text-sm mt-1">Review production, health, feed, and financial performance together in one decision view.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           <CurrentPlanBadge />
@@ -195,12 +196,39 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      <div className="rounded-xl border border-water-300/20 bg-[rgba(6,75,113,0.18)] px-4 py-3 text-sm text-pond-100">
+        <p className="font-medium">Quick guide</p>
+        <p className="mt-1 text-pond-200/75">
+          Use this page to compare survival, feed usage, water-risk pressure, and money flow over the same report period before making your next farm decision.
+        </p>
+      </div>
+
       {error && <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10">{error}</div>}
       {planRestricted ? (
         <div className="rounded-xl px-4 py-3 text-sm border border-amber-400/30 bg-amber-500/10 text-amber-200">
           Free plan is limited to 30-day report history. Upgrade for 90-day and all-time reports.
         </div>
       ) : null}
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="glass-card px-4 py-3">
+          <p className="text-xs text-pond-200/65 uppercase tracking-wider">Report Scope</p>
+          <p className="mt-2 text-2xl font-display text-pond-100">{reportScopeLabel}</p>
+          <p className="text-xs text-pond-200/65 mt-1">The selected period for the numbers and charts on this page.</p>
+        </div>
+        <div className="glass-card px-4 py-3">
+          <p className="text-xs text-pond-200/65 uppercase tracking-wider">Financial Health</p>
+          <p className={`mt-2 text-2xl font-display ${summary.net >= 0 ? "text-success" : "text-danger"}`}>{financialHealth}</p>
+          <p className="text-xs text-pond-200/65 mt-1">Based on revenue minus expenses in the selected period.</p>
+        </div>
+        <div className="glass-card px-4 py-3">
+          <p className="text-xs text-pond-200/65 uppercase tracking-wider">Active Survival</p>
+          <p className={`mt-2 text-2xl font-display ${summary.survivalRate >= 85 ? "text-success" : "text-warning"}`}>
+            {summary.survivalRate.toFixed(1)}%
+          </p>
+          <p className="text-xs text-pond-200/65 mt-1">Live snapshot of survival across currently active fish.</p>
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="stat-card">
@@ -378,7 +406,7 @@ export default function ReportsPage() {
       <div className="glass-card p-4 flex items-start gap-3">
         <Fish className="w-4 h-4 text-water-300 mt-0.5" />
         <p className="text-sm text-pond-200/80">
-          Report scope: <span className="font-semibold text-pond-200">{range === "all" ? "All Time" : range.toUpperCase()}</span>. Use this page for weekly review and decision tracking.
+          Report scope: <span className="font-semibold text-pond-200">{reportScopeLabel}</span>. Use this page for weekly review, not just record keeping.
         </p>
       </div>
     </div>

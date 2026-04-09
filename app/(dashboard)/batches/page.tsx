@@ -181,6 +181,15 @@ export default function BatchesPage() {
 
     return list;
   }, [batches, query, sortBy, statusFilter]);
+  const visibleActiveCount = visibleBatches.filter((batch) => batch.status === "active").length;
+  const visibleHarvestedCount = visibleBatches.filter((batch) => batch.status === "harvested").length;
+  const avgVisibleSurvival =
+    visibleBatches.length > 0
+      ? Math.round(
+          visibleBatches.reduce((sum, batch) => sum + Number(calcSurvivalRate(batch.currentCount, batch.initialCount)), 0) /
+            visibleBatches.length
+        )
+      : 0;
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
@@ -412,7 +421,7 @@ export default function BatchesPage() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="font-display text-2xl font-semibold text-pond-100">Batches</h1>
-          <p className="text-pond-200/75 text-sm mt-1">Manage your production batches</p>
+          <p className="text-pond-200/75 text-sm mt-1">Manage each production cycle with a clear view of stocking, survival, and harvest status.</p>
           {activeBatchLimit !== null ? (
             <p className="text-xs text-pond-300 mt-1">
               {planLabel}: {activeBatchCount}/{activeBatchLimit} active batches used
@@ -426,6 +435,46 @@ export default function BatchesPage() {
           <button onClick={() => setShowForm(true)} className="btn-primary">
             <Plus className="w-4 h-4" /> New Batch
           </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="stat-card">
+          <p className="text-xs text-pond-200/75 uppercase tracking-wider mb-2">Visible Batches</p>
+          <p className="font-mono text-2xl font-semibold text-water-300">{visibleBatches.length}</p>
+        </div>
+        <div className="stat-card">
+          <p className="text-xs text-pond-200/75 uppercase tracking-wider mb-2">Active In View</p>
+          <p className="font-mono text-2xl font-semibold text-pond-200">{visibleActiveCount}</p>
+        </div>
+        <div className="stat-card">
+          <p className="text-xs text-pond-200/75 uppercase tracking-wider mb-2">Harvested In View</p>
+          <p className="font-mono text-2xl font-semibold text-success">{visibleHarvestedCount}</p>
+        </div>
+        <div className="stat-card">
+          <p className="text-xs text-pond-200/75 uppercase tracking-wider mb-2">Avg Survival</p>
+          <p className="font-mono text-2xl font-semibold text-pond-200">{visibleBatches.length > 0 ? `${avgVisibleSurvival}%` : "—"}</p>
+        </div>
+      </div>
+
+      <div className="glass-card p-5 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h2 className="section-title !text-base">Batch Guide</h2>
+          <p className="text-xs text-pond-200/65">Keep original counts and live counts separate</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-pond-200/75">
+          <div className="rounded-xl border border-pond-700/30 bg-black/15 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Create Cleanly</p>
+            <p>Use batches for distinct stocking cycles. Keep the name and stocking date specific enough to trace them later.</p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/15 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Protect History</p>
+            <p>Initial fish count is your original stocking record. Use mortality, tanks, and reopen actions to correct live fish status.</p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/15 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Harvest Carefully</p>
+            <p>Mark a batch harvested only when that cycle is truly closed, or reopen it later with the correct remaining fish count.</p>
+          </div>
         </div>
       </div>
 
@@ -478,7 +527,7 @@ export default function BatchesPage() {
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="relative md:col-span-2">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-pond-300" />
             <input
@@ -488,7 +537,7 @@ export default function BatchesPage() {
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
-          <select className="field" value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
+          <select className="field" aria-label="Sort visible batches" value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
             <option value="name">Name (A-Z)</option>
@@ -521,6 +570,7 @@ export default function BatchesPage() {
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Batch Name</label>
                 <input className="field" required placeholder="Batch A - January Juveniles" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+                <p className="text-xs text-pond-200/60 mt-1">Use a name your team can recognize quickly, such as source, month, or cycle.</p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -531,11 +581,13 @@ export default function BatchesPage() {
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Juvenile Cost (₦)</label>
                   <input className="field" type="number" min={0} placeholder="450000" value={form.juvenileCost} onChange={(e) => setForm((f) => ({ ...f, juvenileCost: +e.target.value }))} />
+                  <p className="text-xs text-pond-200/60 mt-1">Enter the total amount spent to acquire juveniles for this batch.</p>
                 </div>
               </div>
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Target Weight (g)</label>
                 <input className="field" type="number" min={1} placeholder="1200" value={form.targetWeight} onChange={(e) => setForm((f) => ({ ...f, targetWeight: +e.target.value }))} />
+                <p className="text-xs text-pond-200/60 mt-1">Set the expected market weight so the cycle progress view stays realistic.</p>
               </div>
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Stocking Date</label>
@@ -548,6 +600,7 @@ export default function BatchesPage() {
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Notes</label>
                 <textarea className="field resize-none" rows={2} placeholder="Stocked from Ibadan hatchery" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
+                <p className="text-xs text-pond-200/60 mt-1">Capture useful context like source, stocking condition, or unusual observations.</p>
               </div>
               <div className="flex gap-3 pt-2">
                 <button
@@ -595,6 +648,7 @@ export default function BatchesPage() {
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Batch Name</label>
                 <input className="field" required placeholder="Batch A - January Juveniles" value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} />
+                <p className="text-xs text-pond-200/60 mt-1">Rename only if it improves clarity for the team and your records.</p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -605,11 +659,13 @@ export default function BatchesPage() {
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Juvenile Cost (₦)</label>
                   <input className="field" type="number" min={0} placeholder="450000" value={editForm.juvenileCost} onChange={(e) => setEditForm((f) => ({ ...f, juvenileCost: +e.target.value }))} />
+                  <p className="text-xs text-pond-200/60 mt-1">Update this if you need a more accurate starting-cost record for analysis.</p>
                 </div>
               </div>
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Target Weight (g)</label>
                 <input className="field" type="number" min={1} placeholder="1200" value={editForm.targetWeight} onChange={(e) => setEditForm((f) => ({ ...f, targetWeight: +e.target.value }))} />
+                <p className="text-xs text-pond-200/60 mt-1">Adjust this when the market plan changes, not as a substitute for live growth records.</p>
               </div>
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Stocking Date</label>
@@ -622,6 +678,7 @@ export default function BatchesPage() {
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Notes</label>
                 <textarea className="field resize-none" rows={2} placeholder="Stocked from Ibadan hatchery" value={editForm.notes} onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))} />
+                <p className="text-xs text-pond-200/60 mt-1">Keep notes short and specific so they remain useful at harvest time.</p>
               </div>
               <div className="flex gap-3 pt-2">
                 <button
@@ -679,15 +736,18 @@ export default function BatchesPage() {
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Harvested Weight (kg)</label>
                   <input className="field" type="number" min={0.1} step="0.1" placeholder="850" value={harvestForm.harvestedWeightKg} onChange={(e) => setHarvestForm((f) => ({ ...f, harvestedWeightKg: +e.target.value }))} />
+                  <p className="text-xs text-pond-200/60 mt-1">Use the confirmed total harvested weight for this batch closeout.</p>
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Price/kg (₦)</label>
                   <input className="field" type="number" min={1} placeholder="2200" value={harvestForm.harvestPricePerKg} onChange={(e) => setHarvestForm((f) => ({ ...f, harvestPricePerKg: +e.target.value }))} />
+                  <p className="text-xs text-pond-200/60 mt-1">Enter the actual realized price so harvest revenue stays aligned with sales.</p>
                 </div>
               </div>
               <div>
                 <label className="block text-xs text-pond-300 mb-1.5 font-medium">Harvest Notes</label>
                 <textarea className="field resize-none" rows={2} placeholder="Sold to local market buyers" value={harvestForm.harvestNotes} onChange={(e) => setHarvestForm((f) => ({ ...f, harvestNotes: e.target.value }))} />
+                <p className="text-xs text-pond-200/60 mt-1">Add buyer or market context if it will help you compare cycles later.</p>
               </div>
               <div className="flex gap-3 pt-2">
                 <button
@@ -788,7 +848,7 @@ export default function BatchesPage() {
         <div className="glass-card p-16 text-center">
           <Package className="w-12 h-12 text-pond-500 mx-auto mb-4 opacity-40" />
           <h3 className="font-display text-lg text-pond-200 mb-2">No batches found</h3>
-          <p className="text-pond-200/75 text-sm mb-6">Try changing filters/search or create a new batch.</p>
+          <p className="text-pond-200/75 text-sm mb-6">Try changing filters or search, or create a new batch to start tracking a fresh production cycle.</p>
           <button onClick={() => setShowForm(true)} className="btn-primary inline-flex">
             <Plus className="w-4 h-4" /> Create Batch
           </button>

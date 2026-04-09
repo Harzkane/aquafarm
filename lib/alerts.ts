@@ -209,7 +209,6 @@ export async function syncAlertsForUser(userId: string, candidates: AlertCandida
           $set: setPayload,
           $setOnInsert: {
             createdAt: now,
-            acknowledgedAt: null,
             assignedToUserId: null,
             assignedToName: "",
           },

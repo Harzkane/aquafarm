@@ -125,7 +125,7 @@ export default function OpsMonitorPage() {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="font-display text-2xl font-semibold text-pond-100">Ops Monitor</h1>
-          <p className="mt-1 text-sm text-pond-200/75">Cron health and execution telemetry for billing controls.</p>
+          <p className="mt-1 text-sm text-pond-200/75">Monitor background jobs, failures, and execution timing so billing and scheduled platform tasks stay healthy.</p>
         </div>
         <button type="button" onClick={refresh} className="btn-secondary" disabled={refreshing}>
           {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -136,6 +136,27 @@ export default function OpsMonitorPage() {
       {error ? (
         <div className="rounded-xl border border-red-400/35 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>
       ) : null}
+
+      <section className="glass-card p-5 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h2 className="section-title !text-base">Ops Guide</h2>
+          <p className="text-xs text-pond-200/65">Use this page to spot recurring platform issues quickly</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-pond-200/75">
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Failure Review</p>
+            <p>Start with failed runs first. They usually explain why billing syncs or scheduled automation may not be up to date.</p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Timing Signal</p>
+            <p>Average duration helps you spot jobs that are still succeeding but are getting slower over time.</p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Scope</p>
+            <p>This page reports platform execution health only. It does not change farm records or cron results by itself.</p>
+          </div>
+        </div>
+      </section>
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="stat-card">
@@ -164,12 +185,13 @@ export default function OpsMonitorPage() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-pond-300" />
             <input
               className="field pl-9"
+              aria-label="Search ops runs"
               placeholder="Search by job/status/error"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
-          <select className="field" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}>
+          <select className="field" aria-label="Filter ops runs by status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}>
             <option value="all">All statuses</option>
             <option value="success">Success</option>
             <option value="failed">Failed</option>
@@ -183,7 +205,10 @@ export default function OpsMonitorPage() {
           <span className="text-xs text-pond-200/65">{summary.length} jobs</span>
         </div>
         {summary.length === 0 ? (
-          <div className="p-10 text-center text-sm text-pond-200/70">No cron summary available.</div>
+          <div className="p-10 text-center text-sm text-pond-200/70">
+            No cron summary available.
+            <p className="mt-2 text-xs text-pond-200/55">Run history will appear here after background jobs have executed and been recorded.</p>
+          </div>
         ) : (
           <div className="divide-y divide-pond-700/20">
             {summary.map((item) => (
@@ -212,7 +237,10 @@ export default function OpsMonitorPage() {
           <span className="text-xs text-pond-200/65">{totalRuns} entries</span>
         </div>
         {totalRuns === 0 ? (
-          <div className="p-10 text-center text-sm text-pond-200/70">No runs for current filters.</div>
+          <div className="p-10 text-center text-sm text-pond-200/70">
+            No runs for current filters.
+            <p className="mt-2 text-xs text-pond-200/55">Try clearing the search or widening the status filter to inspect more platform activity.</p>
+          </div>
         ) : (
           <>
             <div className="divide-y divide-pond-700/20">

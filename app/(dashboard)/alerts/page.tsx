@@ -228,6 +228,7 @@ export default function AlertsPage() {
     if (sourceFilter !== "all" && alert.source !== sourceFilter) return false;
     return true;
   });
+  const topSource = (payload.sourceCounts || []).slice().sort((a, b) => b.count - a.count)[0];
   const assigneeOptions: StaffOption[] = [
     ...(session?.user ? [{
       _id: String((session.user as any).id || ""),
@@ -241,7 +242,7 @@ export default function AlertsPage() {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="font-display text-2xl font-semibold text-pond-100">Alerts</h1>
-          <p className="mt-1 text-sm text-pond-200/75">Review important farm, billing, and platform issues in one place.</p>
+          <p className="mt-1 text-sm text-pond-200/75">Review the issues that need attention now, assign owners, and move them toward resolution from one place.</p>
         </div>
         <button type="button" className="btn-secondary" onClick={() => load(true)}>
           <Bell className="h-4 w-4" />
@@ -291,6 +292,27 @@ export default function AlertsPage() {
         </div>
       </section>
 
+      <section className="glass-card p-5 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h2 className="section-title !text-base">Triage Guide</h2>
+          <p className="text-xs text-pond-200/65">Treat alerts like a work queue, not just a notification list</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-pond-200/75">
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Critical Focus</p>
+            <p>{counts.critical > 0 ? `${counts.critical} critical alert${counts.critical > 1 ? "s need" : " needs"} quick attention.` : "No critical alerts are active right now."}</p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Main Source</p>
+            <p>{topSource ? `${SOURCE_LABELS[topSource.source] || topSource.source} is generating the most active alerts.` : "No source pattern is active right now."}</p>
+          </div>
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Suggested Flow</p>
+            <p>Acknowledge first, assign an owner, then move the issue into progress so the team knows it is being handled.</p>
+          </div>
+        </div>
+      </section>
+
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr,0.8fr]">
         <div className="glass-card overflow-hidden">
           <div className="border-b border-pond-700/20 px-5 py-4 flex items-center justify-between">
@@ -318,6 +340,7 @@ export default function AlertsPage() {
                       <div className="w-48">
                         <select
                           className="field !py-1.5 !text-xs"
+                          aria-label={`Assign incident ${incident.title}`}
                           value={incident.assignedToUserId || ""}
                           onChange={(e) => updateIncident(incident._id, { assignedToUserId: e.target.value || null })}
                           disabled={busyIncidentId === incident._id}
@@ -380,7 +403,7 @@ export default function AlertsPage() {
         <div className="glass-card p-5 space-y-4">
           <div>
             <h2 className="section-title">Engine Signals</h2>
-            <p className="mt-1 text-xs text-pond-200/65">Quick view of where alert volume is clustering.</p>
+            <p className="mt-1 text-xs text-pond-200/65">Quick view of where alert volume is clustering so you can spot recurring trouble areas.</p>
           </div>
           <div className="rounded-xl border border-pond-700/30 bg-black/20 px-4 py-3">
             <p className="text-xs text-pond-200/65">Average open age</p>
@@ -419,7 +442,7 @@ export default function AlertsPage() {
                   key={option}
                   type="button"
                   onClick={() => setSeverityFilter(option)}
-                  className={`rounded-full px-3 py-1.5 text-xs capitalize transition-colors ${
+                  className={`rounded-lg px-2 py-1.5 text-xs capitalize transition-colors ${
                     active ? "text-pond-100" : "text-pond-200/75 hover:text-pond-100"
                   }`}
                   style={{
@@ -434,7 +457,7 @@ export default function AlertsPage() {
           </div>
           <div className="w-full lg:ml-auto lg:w-64">
             <label className="mb-1.5 block text-xs font-medium text-pond-300">Source</label>
-            <select className="field" value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
+            <select className="field" aria-label="Filter alerts by source" value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
               {sourceOptions.map((source) => (
                 <option key={source} value={source}>
                   {source === "all" ? "All sources" : (SOURCE_LABELS[source] || source)}
@@ -454,6 +477,9 @@ export default function AlertsPage() {
           <div className="p-10 text-center text-sm text-pond-200/70">
             <CheckCircle2 className="h-5 w-5 mx-auto mb-2 text-emerald-300" />
             {payload.alerts.length === 0 ? "No active alerts right now." : "No alerts match the current filters."}
+            <p className="mt-2 text-xs text-pond-200/55">
+              {payload.alerts.length === 0 ? "That usually means the farm is stable or outstanding issues have already been resolved." : "Try broadening the filters to review all open work again."}
+            </p>
           </div>
         ) : (
           <div className="divide-y divide-pond-700/20">
@@ -499,6 +525,7 @@ export default function AlertsPage() {
                     <div className="w-48">
                       <select
                         className="field !py-1.5 !text-xs"
+                        aria-label={`Assign alert ${alert.title}`}
                         value={alert.assignedToUserId || ""}
                         onChange={(e) => updateAlert(alert._id, { assignedToUserId: e.target.value || null })}
                         disabled={busyId === alert._id}

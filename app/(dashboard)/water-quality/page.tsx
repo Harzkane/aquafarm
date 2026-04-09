@@ -141,6 +141,10 @@ export default function WaterQualityPage() {
       riskCount: values.riskCount,
     };
   }, [filteredLogs]);
+  const todayReadingCount = useMemo(
+    () => logs.filter((log) => new Date(log.date).toDateString() === new Date().toDateString()).length,
+    [logs],
+  );
 
   function setField<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -189,11 +193,29 @@ export default function WaterQualityPage() {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="font-display text-2xl font-semibold text-pond-100">Water Quality</h1>
-          <p className="text-pond-200/75 text-sm mt-1">Dedicated pH/ammonia/temperature/DO monitoring by batch</p>
+          <p className="text-pond-200/75 text-sm mt-1">Track pH, ammonia, temperature, and dissolved oxygen before water stress becomes fish loss.</p>
         </div>
         <button className="btn-primary" onClick={() => { setFormError(""); setShowForm(true); }}>
           <Plus className="w-4 h-4" /> Add Reading
         </button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="glass-card px-4 py-3">
+          <p className="text-xs text-pond-200/65 uppercase tracking-wider">Readings Today</p>
+          <p className="mt-2 text-2xl font-display text-pond-100">{todayReadingCount}</p>
+          <p className="text-xs text-pond-200/65 mt-1">Water checks logged for today.</p>
+        </div>
+        <div className="glass-card px-4 py-3">
+          <p className="text-xs text-pond-200/65 uppercase tracking-wider">Safe pH Range</p>
+          <p className="mt-2 text-2xl font-display text-pond-100">6.5 - 8.0</p>
+          <p className="text-xs text-pond-200/65 mt-1">Outside this range should be reviewed quickly.</p>
+        </div>
+        <div className="glass-card px-4 py-3">
+          <p className="text-xs text-pond-200/65 uppercase tracking-wider">Ammonia Target</p>
+          <p className="mt-2 text-2xl font-display text-pond-100">&lt; 0.5</p>
+          <p className="text-xs text-pond-200/65 mt-1">Higher values can signal dangerous water stress.</p>
+        </div>
       </div>
 
       {isFreePlan ? (
@@ -213,6 +235,13 @@ export default function WaterQualityPage() {
       ) : null}
 
       {error && <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10">{error}</div>}
+
+      <div className="rounded-xl border border-water-300/20 bg-[rgba(6,75,113,0.18)] px-4 py-3 text-sm text-pond-100">
+        <p className="font-medium">Quick guide</p>
+        <p className="mt-1 text-pond-200/75">
+          Log at least one water check when fish behavior changes, after feeding pressure increases, or when mortality starts to rise.
+        </p>
+      </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="stat-card">
@@ -242,7 +271,7 @@ export default function WaterQualityPage() {
       </div>
 
       <div className="glass-card p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-        <select className="field" value={batchFilter} onChange={(e) => setBatchFilter(e.target.value)}>
+        <select aria-label="Filter by batch" className="field" value={batchFilter} onChange={(e) => setBatchFilter(e.target.value)}>
           <option value="all">All batches</option>
           {batches.map((b) => (
             <option key={b._id} value={b._id}>
@@ -258,7 +287,10 @@ export default function WaterQualityPage() {
 
       <div className="glass-card overflow-hidden">
         <div className="px-5 py-4 border-b border-pond-700/20 flex items-center justify-between gap-2">
-          <h2 className="section-title">Recent Water Readings</h2>
+          <div>
+            <h2 className="section-title">Recent Water Readings</h2>
+            <p className="text-xs text-pond-200/65 mt-1">Review readings by batch and scan for risk status quickly.</p>
+          </div>
           <p className="text-xs text-pond-200/65">{filteredLogs.length} records</p>
         </div>
         {filteredLogs.length === 0 ? (
@@ -384,26 +416,34 @@ export default function WaterQualityPage() {
                       </option>
                     ))}
                   </select>
+                  <p className="text-[11px] text-pond-200/60 mt-1">Use “All Tanks” only when the reading reflects the whole batch environment.</p>
                 </div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-[rgba(12,12,14,0.45)] px-4 py-3 text-xs text-pond-200/70">
+                Enter at least one real water metric. More complete readings make alerts and trends more reliable.
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">pH</label>
                   <input className="field" type="number" step="0.1" placeholder="7.2" value={form.ph} onChange={(e) => setField("ph", e.target.value)} />
+                  <p className="text-[11px] text-pond-200/60 mt-1">Target range: 6.5 to 8.0</p>
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Ammonia (ppm)</label>
                   <input className="field" type="number" step="0.01" placeholder="0.12" value={form.ammonia} onChange={(e) => setField("ammonia", e.target.value)} />
+                  <p className="text-[11px] text-pond-200/60 mt-1">Target: below 0.5 ppm</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Temperature (°C)</label>
                   <input className="field" type="number" step="0.1" placeholder="28.4" value={form.temperature} onChange={(e) => setField("temperature", e.target.value)} />
+                  <p className="text-[11px] text-pond-200/60 mt-1">Healthy working range: 26 to 30°C</p>
                 </div>
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Dissolved O₂ (mg/L)</label>
                   <input className="field" type="number" step="0.1" placeholder="5.8" value={form.dissolvedO2} onChange={(e) => setField("dissolvedO2", e.target.value)} />
+                  <p className="text-[11px] text-pond-200/60 mt-1">Higher is generally safer, especially above 5 mg/L.</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">

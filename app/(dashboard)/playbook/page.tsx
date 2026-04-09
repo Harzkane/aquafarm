@@ -63,7 +63,28 @@ export default function PlaybookPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-semibold text-pond-100">Farm Playbook</h1>
-        <p className="text-pond-200/75 text-sm mt-1">Operational SOP reference from your original farm tracker workbook</p>
+        <p className="text-pond-200/75 text-sm mt-1">Use this as a working field reference for stocking, feeding, water checks, sorting, and quick response decisions.</p>
+      </div>
+
+      <div className="glass-card p-5 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h2 className="section-title !text-base">How To Use This Page</h2>
+          <p className="text-xs text-pond-200/65">Reference first, then log what actually happened in the product</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-pond-200/75">
+          <div className="rounded-xl p-3" style={{ background: "rgba(12, 12, 14,0.5)", border: "1px solid rgba(148, 163, 184,0.12)" }}>
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Plan The Day</p>
+            <p>Check growth stage, milestone timing, and water-change expectations before making stocking or feeding decisions.</p>
+          </div>
+          <div className="rounded-xl p-3" style={{ background: "rgba(12, 12, 14,0.5)", border: "1px solid rgba(148, 163, 184,0.12)" }}>
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Respond Faster</p>
+            <p>Use the quick-response and safe-range sections when something feels off on the farm and you need a first next step.</p>
+          </div>
+          <div className="rounded-xl p-3" style={{ background: "rgba(12, 12, 14,0.5)", border: "1px solid rgba(148, 163, 184,0.12)" }}>
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-1.5">Keep Records Separate</p>
+            <p>This page is guidance only. Record actual mortality, water readings, feeding, harvest, and reports in their own screens.</p>
+          </div>
+        </div>
       </div>
 
       <div className="glass-card p-5 space-y-3">
@@ -71,6 +92,7 @@ export default function PlaybookPage() {
           <Fish className="w-4 h-4 text-water-300" />
           <h2 className="section-title !text-base">Growth Stage Guide</h2>
         </div>
+        <p className="text-xs text-pond-200/70">Use this table to match feed size and frequency to the stage your fish are actually in, not just the calendar week.</p>
         <div className="overflow-x-auto">
           <table className="data-table">
             <thead>
@@ -105,6 +127,7 @@ export default function PlaybookPage() {
             <Waves className="w-4 h-4 text-pond-300" />
             <h2 className="section-title !text-base">Tank Setup Principles</h2>
           </div>
+          <p className="text-xs text-pond-200/70">These are the basic setup habits that reduce avoidable stress, leaks, and handling losses.</p>
           <ul className="space-y-2 text-sm text-pond-200/80">
             <li className="rounded-xl p-3" style={{ background: "rgba(12, 12, 14,0.5)", border: "1px solid rgba(148, 163, 184,0.12)" }}>
               Fill cut tanks to about <span className="font-semibold text-pond-100">75-80%</span> working depth to keep safe headspace.
@@ -123,6 +146,7 @@ export default function PlaybookPage() {
             <ClipboardList className="w-4 h-4 text-mud-300" />
             <h2 className="section-title !text-base">Production Milestones</h2>
           </div>
+          <p className="text-xs text-pond-200/70">These checkpoints help you time sorts and harvest prep before uneven growth or crowding becomes expensive.</p>
           <div className="space-y-2">
             {MILESTONES.map((m) => (
               <div
@@ -143,6 +167,7 @@ export default function PlaybookPage() {
 
       <div className="glass-card p-5 space-y-3">
         <h2 className="section-title !text-base">Startup Strategy Patterns</h2>
+        <p className="text-xs text-pond-200/70">Choose the startup pattern that best fits your tank layout, observation strength, and aeration reliability.</p>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {STARTUP_PATTERNS.map((row) => (
             <div key={row.title} className="rounded-xl p-3" style={{ background: "rgba(12, 12, 14,0.5)", border: "1px solid rgba(148, 163, 184,0.12)" }}>
@@ -159,6 +184,7 @@ export default function PlaybookPage() {
           <Droplets className="w-4 h-4 text-water-300" />
           <h2 className="section-title !text-base">Water Quality Safe Ranges</h2>
         </div>
+        <p className="text-xs text-pond-200/70">Use these ranges as fast field checks when fish behavior, smell, or appetite suggests water trouble.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {SAFE_RANGES.map((row) => (
             <div
@@ -178,6 +204,7 @@ export default function PlaybookPage() {
 
       <div className="glass-card p-5 space-y-3">
         <h2 className="section-title !text-base">Water Change Schedule (Reference)</h2>
+        <p className="text-xs text-pond-200/70">Treat this as a starting point. Actual frequency should still respond to density, weather, and water readings.</p>
         <div className="overflow-x-auto">
           <table className="data-table">
             <thead>
@@ -207,6 +234,7 @@ export default function PlaybookPage() {
           <AlertTriangle className="w-4 h-4 text-warning" />
           <h2 className="section-title !text-base">Quick Response Protocols</h2>
         </div>
+        <p className="text-xs text-pond-200/70">These are first-response actions meant to stabilize the situation before you investigate deeper.</p>
         <div className="space-y-2">
           {QUICK_ACTIONS.map((row) => (
             <div
@@ -224,7 +252,7 @@ export default function PlaybookPage() {
       <div className="glass-card p-4 flex items-start gap-3">
         <CheckCircle2 className="w-4 h-4 text-success mt-0.5" />
         <div>
-          <p className="text-sm text-pond-200/80">Use this page as your operating reference. Keep data entry in Daily Log, Water Quality, Feed Inventory, Harvest, and Reports.</p>
+          <p className="text-sm text-pond-200/80">Use this page as your operating reference. Keep actual farm records in Daily Log, Water Quality, Feed Inventory, Harvest, and Reports so the numbers stay trustworthy.</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
             {BENCHMARKS.map((row) => (
               <div key={row.label} className="rounded-lg px-3 py-2" style={{ background: "rgba(12, 12, 14,0.5)" }}>

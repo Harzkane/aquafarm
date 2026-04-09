@@ -642,7 +642,7 @@ export default function TanksPage() {
             Tanks
           </h1>
           <p className="text-pond-200/75 text-sm mt-1">
-            Manage your tank setup, status and fish allocation
+            Manage tank setup, fish capacity, and where each active batch is currently sitting.
           </p>
           <p className="text-xs text-pond-300 mt-1">
             {planLabel}: {tankCountLabel} tank records used
@@ -662,6 +662,13 @@ export default function TanksPage() {
             <Plus className="w-4 h-4" /> Add Tank
           </button>
         </div>
+      </div>
+
+      <div className="rounded-xl border border-water-300/20 bg-[rgba(6,75,113,0.18)] px-4 py-3 text-sm text-pond-100">
+        <p className="font-medium">Quick guide</p>
+        <p className="mt-1 text-pond-200/75">
+          Create empty tanks first, then use allocation or movement actions to place fish into them. That keeps tank records aligned with your batch totals.
+        </p>
       </div>
 
       {error && (
@@ -769,7 +776,7 @@ export default function TanksPage() {
               Set up your tanks
             </h3>
             <p className="text-pond-200/75 text-sm">
-              Quickly add your 4 tanks (tarpaulin + 3 half-cut) or add manually
+              Quickly add your 4 common tanks, or create them manually one by one.
             </p>
           </div>
           <div className="flex gap-3 justify-center flex-wrap">
