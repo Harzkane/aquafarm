@@ -13,6 +13,7 @@ import DashboardClient from "./DashboardClient";
 import { getBatchPhase, weeksSince } from "@/lib/utils";
 import { summarizeFeedInventory } from "@/lib/feed-inventory";
 import { getPlanConfig } from "@/lib/plans";
+import { analyzeHarvestReadiness } from "@/lib/reports";
 
 const DASHBOARD_TIMEFRAMES = [7, 14, 30, 90] as const;
 
@@ -59,7 +60,12 @@ function buildTankHealthSeries(logs: any[], days: number) {
       riskLogs: dayLogs.filter((log: any) => {
         const ph = Number(log.ph);
         const ammonia = Number(log.ammonia);
-        return (Number.isFinite(ph) && (ph < 6.5 || ph > 8)) || (Number.isFinite(ammonia) && ammonia >= 0.5);
+        const dissolvedO2 = Number(log.dissolvedO2);
+        return (
+          (Number.isFinite(ph) && (ph < 6.5 || ph > 8)) ||
+          (Number.isFinite(ammonia) && ammonia >= 0.5) ||
+          (Number.isFinite(dissolvedO2) && dissolvedO2 < 5)
+        );
       }).length,
       tanksLogged,
     });
@@ -133,7 +139,15 @@ export default async function DashboardPage() {
   const totalRevenue  = revenues.reduce((s: number, r: any) => s + r.totalAmount, 0);
 
   // Build action items for operator focus
-  const actions: Array<{ level: "info" | "warning" | "danger"; title: string; detail: string; href: string }> = [];
+  const actions: Array<{
+    level: "info" | "warning" | "danger";
+    title: string;
+    detail: string;
+    href: string;
+    category: "logging" | "planning" | "health" | "inventory" | "setup" | "harvest";
+    actionLabel: string;
+    whyNow: string;
+  }> = [];
   const today = new Date();
   const todayHasLog = recentLogs.some((l: any) => new Date(l.date).toDateString() === today.toDateString());
   const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
@@ -141,8 +155,25 @@ export default async function DashboardPage() {
   const recentMortality = last3DaysLogs.reduce((s: number, l: any) => s + (l.mortality || 0), 0);
   const waterAlerts = last3DaysLogs.filter((l: any) => (
     (typeof l.ph === "number" && (l.ph < 6.5 || l.ph > 8)) ||
-    (typeof l.ammonia === "number" && l.ammonia >= 0.5)
+    (typeof l.ammonia === "number" && l.ammonia >= 0.5) ||
+    (typeof l.dissolvedO2 === "number" && l.dissolvedO2 < 5)
   )).length;
+  const growthSampleLogs14d = recentLogs.filter((l: any) => {
+    if (new Date(l.date) < fourteenDaysAgo) return false;
+    return Number.isFinite(Number(l.avgWeight)) || Number.isFinite(Number(l.fishCount));
+  });
+  const batchReadiness = batches
+    .map((batch: any) => {
+      const batchLogs = recentLogs.filter((log: any) => String(log.batchId || "") === String(batch._id));
+      return {
+        batchId: String(batch._id),
+        batchName: String(batch.name || "Batch"),
+        ...analyzeHarvestReadiness(batch, batchLogs, weeksSince(batch.stockingDate)),
+      };
+    })
+    .sort((a, b) => b.readinessScore - a.readinessScore || a.batchName.localeCompare(b.batchName));
+  const readyBatch = batchReadiness.find((batch) => batch.readinessStatus === "ready") || null;
+  const approachingBatch = batchReadiness.find((batch) => batch.readinessStatus === "approaching") || null;
 
   if (batches.length === 0) {
     actions.push({
@@ -150,6 +181,9 @@ export default async function DashboardPage() {
       title: "Create your first batch",
       detail: "Start with batch details so growth, feeding and mortality can be tracked.",
       href: "/batches",
+      category: "setup",
+      actionLabel: "Create batch",
+      whyNow: "Without a batch, the system cannot build a usable operating timeline.",
     });
   } else {
     for (const batch of batches) {
@@ -170,6 +204,9 @@ export default async function DashboardPage() {
           title: `${batch.name}: ${weeksToNext === 0 ? nextMilestone.dueNowLabel : nextMilestone.label}`,
           detail: weeksToNext === 0 ? "Due now." : nextMilestone.dueSoonLabel,
           href: "/calendar",
+          category: "planning",
+          actionLabel: "Review calendar",
+          whyNow: "Missed sorting and harvest timing usually becomes more expensive later.",
         });
       }
     }
@@ -181,6 +218,9 @@ export default async function DashboardPage() {
       title: "No tanks configured",
       detail: "Add your tanks to improve planning and stocking decisions.",
       href: "/tanks",
+      category: "setup",
+      actionLabel: "Add tanks",
+      whyNow: "Tank structure is needed for movement history, density control, and clearer live stock truth.",
     });
   }
 
@@ -190,6 +230,9 @@ export default async function DashboardPage() {
       title: "No daily log yet",
       detail: "Record today's feed and water checks to keep trends accurate.",
       href: "/feeding",
+      category: "logging",
+      actionLabel: "Log today",
+      whyNow: "Daily gaps weaken alerts, reports, feed runway, and trend accuracy.",
     });
   }
 
@@ -199,6 +242,9 @@ export default async function DashboardPage() {
       title: "Mortality spike in last 3 days",
       detail: `${recentMortality} deaths recorded recently. Review causes and tank conditions.`,
       href: "/mortality",
+      category: "health",
+      actionLabel: "Review mortality",
+      whyNow: "Mortality spikes usually mean the farm needs an immediate diagnosis and response.",
     });
   }
 
@@ -206,8 +252,51 @@ export default async function DashboardPage() {
     actions.push({
       level: "warning",
       title: "Water quality out of range",
-      detail: `${waterAlerts} recent log${waterAlerts > 1 ? "s show" : " shows"} pH/ammonia risk.`,
+      detail: `${waterAlerts} recent log${waterAlerts > 1 ? "s show" : " shows"} pH, ammonia, or dissolved oxygen risk.`,
       href: "/water-quality",
+      category: "health",
+      actionLabel: "Inspect water logs",
+      whyNow: "Water issues often spread quickly into feed refusal, stress, and mortality.",
+    });
+  }
+
+  if (batches.length > 0 && growthSampleLogs14d.length === 0) {
+    actions.push({
+      level: "info",
+      title: "No recent growth sample",
+      detail: "No fish count or average weight sample has been logged in the last 14 days.",
+      href: "/feeding",
+      category: "logging",
+      actionLabel: "Record growth check",
+      whyNow: "Without growth samples, harvest timing and trend confidence stay weak.",
+    });
+  }
+
+  if (readyBatch) {
+    actions.push({
+      level: "warning",
+      title: `${readyBatch.batchName} is ready for harvest review`,
+      detail:
+        readyBatch.latestAvgWeight != null && readyBatch.targetWeight != null
+          ? `Latest sample is ${readyBatch.latestAvgWeight.toFixed(0)}g against a ${readyBatch.targetWeight.toFixed(0)}g target.`
+          : "Timing and recent samples suggest this batch should be reviewed for harvest now.",
+      href: "/harvest",
+      category: "harvest",
+      actionLabel: "Review batch",
+      whyNow: "Late harvest decisions can tie up tank space, feed spend, and cash recovery.",
+    });
+  } else if (approachingBatch) {
+    actions.push({
+      level: "info",
+      title: `${approachingBatch.batchName} is approaching harvest readiness`,
+      detail:
+        approachingBatch.latestAvgWeight != null && approachingBatch.targetWeight != null
+          ? `Latest sample is ${approachingBatch.latestAvgWeight.toFixed(0)}g of ${approachingBatch.targetWeight.toFixed(0)}g target weight.`
+          : "Recent timing suggests this batch should be watched closely for harvest timing.",
+      href: "/feeding",
+      category: "harvest",
+      actionLabel: "Check growth",
+      whyNow: "A fresh growth sample now improves harvest timing, pricing, and planning confidence.",
     });
   }
 
@@ -218,6 +307,9 @@ export default async function DashboardPage() {
       title: "Harvest window open",
       detail: `${harvestReady} batch${harvestReady > 1 ? "es are" : " is"} in harvest range.`,
       href: "/harvest",
+      category: "harvest",
+      actionLabel: "Review harvests",
+      whyNow: "Harvest timing affects pricing, stocking turnover, and cash recovery.",
     });
   }
 
@@ -232,8 +324,14 @@ export default async function DashboardPage() {
           ? `${mostUrgentFeed.remainingKg.toFixed(2)}kg left, about ${mostUrgentFeed.estimatedDaysLeft.toFixed(1)} feeding days remaining.`
           : `${mostUrgentFeed.remainingKg.toFixed(2)}kg left. Log recent usage to estimate days remaining.`,
       href: "/feed-inventory",
+      category: "inventory",
+      actionLabel: "Check feed stock",
+      whyNow: "Feed stock-outs interrupt growth and make daily planning unreliable.",
     });
   }
+
+  const actionPriority = { danger: 0, warning: 1, info: 2 } as const;
+  actions.sort((a, b) => actionPriority[a.level] - actionPriority[b.level] || a.title.localeCompare(b.title));
 
   const chartDataByRange = Object.fromEntries(
     availableTimeframes.map((days) => [String(days), buildRangeSeries(recentLogs, days)])
@@ -257,6 +355,7 @@ export default async function DashboardPage() {
         .reduce((s: number, log: any) => s + (log.mortality || 0), 0),
       totalExpenses: batchExpenses.reduce((s: number, entry: any) => s + Number(entry.amount || 0), 0),
       totalRevenue: batchRevenue.reduce((s: number, entry: any) => s + Number(entry.totalAmount || 0), 0),
+      ...analyzeHarvestReadiness(batch, batchLogs, weeksSince(batch.stockingDate)),
       chartDataByRange: Object.fromEntries(
         availableTimeframes.map((days) => [String(days), buildRangeSeries(batchLogs, days)])
       ),
@@ -338,7 +437,12 @@ export default async function DashboardPage() {
       entry.mortality14d += Number(log.mortality || 0);
       const ph = Number(log.ph);
       const ammonia = Number(log.ammonia);
-      if ((Number.isFinite(ph) && (ph < 6.5 || ph > 8)) || (Number.isFinite(ammonia) && ammonia >= 0.5)) {
+      const dissolvedO2 = Number(log.dissolvedO2);
+      if (
+        (Number.isFinite(ph) && (ph < 6.5 || ph > 8)) ||
+        (Number.isFinite(ammonia) && ammonia >= 0.5) ||
+        (Number.isFinite(dissolvedO2) && dissolvedO2 < 5)
+      ) {
         entry.waterRiskLogs += 1;
       }
       entry.logCount += 1;
@@ -393,10 +497,11 @@ export default async function DashboardPage() {
     availableTimeframes: availableTimeframes.map(String),
     chartDataByRange,
     batchSummaries,
+    batchReadiness,
     tankSnapshots,
     tankHealthTrend,
     recentMovements: movementSummaries,
-    actions: actions.slice(0, 4),
+    actions: actions.slice(0, 6),
     batches: JSON.parse(JSON.stringify(batches)),
     tanks: JSON.parse(JSON.stringify(tanks)),
     farmName: (session?.user as any)?.farmName || "My Catfish Farm",

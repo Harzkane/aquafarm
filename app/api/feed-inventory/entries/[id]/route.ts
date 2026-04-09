@@ -6,6 +6,7 @@ import { connectDB } from "@/lib/db";
 import { FeedInventory } from "@/models/FeedInventory";
 import { DailyLog } from "@/models/DailyLog";
 import { getFeedIdentity, getFeedProductBalances } from "@/lib/feed-inventory";
+import { removeFeedPurchaseExpense, syncFeedPurchaseExpense } from "@/lib/financial-sync";
 
 function validateBody(body: any) {
   const date = body?.date ? new Date(body.date) : new Date();
@@ -60,6 +61,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const entry = inv.purchases.id(params.id);
   if (!entry) return NextResponse.json({ error: "Purchase not found" }, { status: 404 });
+  const previousValue = entry.toObject ? entry.toObject() : { ...entry };
   const hypotheticalPurchases = inv.purchases.map((purchase: any) => {
     if (String(purchase._id) !== params.id) return purchase.toObject ? purchase.toObject() : purchase;
     return {
@@ -86,7 +88,25 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
   Object.assign(entry, validated.value);
   inv.updatedAt = new Date();
-  await inv.save();
+  try {
+    await inv.save();
+    await syncFeedPurchaseExpense({
+      userId,
+      purchaseId: params.id,
+      date: new Date(validated.value.date),
+      totalCost: Number(validated.value.totalCost || 0),
+      brand: String(validated.value.brand || ""),
+      pelletSizeMm: validated.value.pelletSizeMm ?? null,
+      bagSizeKg: Number(validated.value.bagSizeKg || 0),
+      bags: Number(validated.value.bags || 0),
+      supplier: String(validated.value.supplier || ""),
+    });
+  } catch (error) {
+    Object.assign(entry, previousValue);
+    inv.updatedAt = new Date();
+    await inv.save();
+    throw error;
+  }
   return NextResponse.json(inv);
 }
 
@@ -105,6 +125,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 
   const entry = inv.purchases.id(params.id);
   if (!entry) return NextResponse.json({ error: "Purchase not found" }, { status: 404 });
+  const previousValue = entry.toObject ? entry.toObject() : { ...entry };
   const hypotheticalPurchases = inv.purchases
     .filter((purchase: any) => String(purchase._id) !== params.id)
     .map((purchase: any) => (purchase.toObject ? purchase.toObject() : purchase));
@@ -127,6 +148,14 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   }
   entry.deleteOne();
   inv.updatedAt = new Date();
-  await inv.save();
+  try {
+    await inv.save();
+    await removeFeedPurchaseExpense(userId, params.id);
+  } catch (error) {
+    inv.purchases.push(previousValue);
+    inv.updatedAt = new Date();
+    await inv.save();
+    throw error;
+  }
   return NextResponse.json(inv);
 }

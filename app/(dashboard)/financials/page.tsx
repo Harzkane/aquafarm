@@ -20,6 +20,8 @@ type Expense = {
   amount: number;
   date: string;
   batchId?: string;
+  source?: string;
+  sourceLabel?: string;
 };
 type Revenue = {
   _id?: string;
@@ -43,6 +45,8 @@ type Transaction = {
   amount: number;
   date: string;
   batchId?: string;
+  source?: string;
+  sourceLabel?: string;
   raw: Expense | Revenue;
 };
 
@@ -108,6 +112,8 @@ export default function FinancialsPage() {
       amount: e.amount || 0,
       date: e.date,
       batchId: e.batchId,
+      source: e.source,
+      sourceLabel: e.sourceLabel,
       raw: e,
     }));
 
@@ -634,14 +640,17 @@ export default function FinancialsPage() {
                 <p className="text-pond-200/70">Category: <span className="text-pond-200 capitalize">{tx.category || "—"}</span></p>
               </div>
               <p className="text-xs text-pond-400/70">{tx.description || "—"}</p>
+              {tx.type === "expense" && tx.source === "feed_purchase" ? (
+                <p className="text-[11px] text-water-300">{tx.sourceLabel || "Synced from feed inventory"}</p>
+              ) : null}
               <p className={`font-mono text-sm font-medium ${tx.type === "revenue" ? "text-success" : "text-danger"}`}>
                 {tx.type === "revenue" ? "+" : "-"}{formatNaira(tx.amount || 0)}
               </p>
               <div className="flex items-center gap-2 pt-1">
-                <button className="btn-secondary !px-2.5 !py-1.5 text-xs" onClick={() => openEdit(tx)} disabled={!tx.id}>
+                <button className="btn-secondary !px-2.5 !py-1.5 text-xs" onClick={() => openEdit(tx)} disabled={!tx.id || (tx.type === "expense" && tx.source === "feed_purchase")}>
                   <Pencil className="w-3.5 h-3.5" /> Edit
                 </button>
-                <button className="btn-secondary !px-2.5 !py-1.5 text-xs text-danger" onClick={() => setDeletingTx(tx)} disabled={!tx.id}>
+                <button className="btn-secondary !px-2.5 !py-1.5 text-xs text-danger" onClick={() => setDeletingTx(tx)} disabled={!tx.id || (tx.type === "expense" && tx.source === "feed_purchase")}>
                   <Trash2 className="w-3.5 h-3.5" /> Delete
                 </button>
               </div>
@@ -657,15 +666,20 @@ export default function FinancialsPage() {
                   <td><span className={`badge ${tx.type === "revenue" ? "badge-green" : "badge-red"}`}>{tx.type === "revenue" ? "Sale" : "Expense"}</span></td>
                   <td className="text-xs">{tx.batchId ? (batchNameMap[tx.batchId] || "Unknown") : "General"}</td>
                   <td className="text-xs capitalize">{tx.category || "—"}</td>
-                  <td className="text-xs text-pond-400/70">{tx.description || "—"}</td>
+                  <td className="text-xs text-pond-400/70">
+                    {tx.description || "—"}
+                    {tx.type === "expense" && tx.source === "feed_purchase" ? (
+                      <span className="ml-2 text-water-300">• {tx.sourceLabel || "Synced"}</span>
+                    ) : null}
+                  </td>
                   <td className={`font-mono text-sm font-medium ${tx.type === "revenue" ? "text-success" : "text-danger"}`}>
                     {tx.type === "revenue" ? "+" : "-"}{formatNaira(tx.amount || 0)}
                   </td>
                   <td className="text-xs text-pond-200/65 font-mono">{new Date(tx.date).toLocaleDateString("en-NG", { day: "numeric", month: "short" })}</td>
                   <td>
                     <div className="flex items-center gap-1">
-                      <button className="btn-secondary !px-2 !py-1 text-xs" onClick={() => openEdit(tx)} disabled={!tx.id}><Pencil className="w-3.5 h-3.5" /></button>
-                      <button className="btn-secondary !px-2 !py-1 text-xs text-danger" onClick={() => setDeletingTx(tx)} disabled={!tx.id}><Trash2 className="w-3.5 h-3.5" /></button>
+                      <button className="btn-secondary !px-2 !py-1 text-xs" onClick={() => openEdit(tx)} disabled={!tx.id || (tx.type === "expense" && tx.source === "feed_purchase")}><Pencil className="w-3.5 h-3.5" /></button>
+                      <button className="btn-secondary !px-2 !py-1 text-xs text-danger" onClick={() => setDeletingTx(tx)} disabled={!tx.id || (tx.type === "expense" && tx.source === "feed_purchase")}><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   </td>
                 </tr>

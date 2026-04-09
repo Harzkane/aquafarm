@@ -5,6 +5,7 @@ import { connectDB } from "@/lib/db";
 import { FeedInventory } from "@/models/FeedInventory";
 import { DailyLog } from "@/models/DailyLog";
 import { getFeedIdentity, getFeedProductBalances, summarizeFeedInventory } from "@/lib/feed-inventory";
+import { syncFeedPurchaseExpense } from "@/lib/financial-sync";
 
 type PurchasePayload = {
   date?: string;
@@ -124,7 +125,27 @@ export async function POST(req: NextRequest) {
     notes: payload.notes || "",
   });
   inventory.updatedAt = new Date();
-  await inventory.save();
+  try {
+    await inventory.save();
+    const savedPurchase = inventory.purchases[inventory.purchases.length - 1];
+    await syncFeedPurchaseExpense({
+      userId,
+      purchaseId: String(savedPurchase._id),
+      date: new Date(savedPurchase.date),
+      totalCost: Number(savedPurchase.totalCost || 0),
+      brand: String(savedPurchase.brand || ""),
+      pelletSizeMm: savedPurchase.pelletSizeMm ?? null,
+      bagSizeKg: Number(savedPurchase.bagSizeKg || 0),
+      bags: Number(savedPurchase.bags || 0),
+      supplier: String(savedPurchase.supplier || ""),
+    });
+  } catch (error) {
+    const rollbackEntry = inventory.purchases[inventory.purchases.length - 1];
+    if (rollbackEntry) rollbackEntry.deleteOne();
+    inventory.updatedAt = new Date();
+    await inventory.save();
+    throw error;
+  }
 
   return NextResponse.json(inventory, { status: 201 });
 }

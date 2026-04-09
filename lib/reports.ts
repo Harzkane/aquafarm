@@ -9,6 +9,18 @@ type Bucket = {
   feed: number;
 };
 
+export type HarvestReadiness = {
+  readinessScore: number;
+  readinessStatus: "growing" | "approaching" | "ready";
+  latestAvgWeight: number | null;
+  latestFishCount: number | null;
+  latestGrowthDate: string | null;
+  targetWeight: number | null;
+  weightProgressPct: number | null;
+  daysToTargetHarvest: number | null;
+  cycleProgressPct: number;
+};
+
 function startOfDay(date: Date) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -120,4 +132,69 @@ export function buildReportBuckets(
     monthCursor.setMonth(monthCursor.getMonth() + 1, 1);
   }
   return { granularity: "monthly", buckets };
+}
+
+export function analyzeHarvestReadiness(batch: any, logs: any[], weeksSinceStocking: number): HarvestReadiness {
+  const growthLogs = logs
+    .filter((log: any) => Number.isFinite(Number(log.avgWeight)) || Number.isFinite(Number(log.fishCount)))
+    .slice()
+    .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const latestGrowthLog = growthLogs[0] || null;
+  const latestAvgWeight = Number.isFinite(Number(latestGrowthLog?.avgWeight)) ? Number(latestGrowthLog.avgWeight) : null;
+  const latestFishCount = Number.isFinite(Number(latestGrowthLog?.fishCount)) ? Number(latestGrowthLog.fishCount) : null;
+  const targetWeight = Number(batch.targetWeight || 0);
+  const survivalRate = Number(batch.initialCount || 0) > 0 ? (Number(batch.currentCount || 0) / Number(batch.initialCount || 1)) * 100 : 0;
+  const cycleProgressPct = Math.min((weeksSinceStocking / 18) * 100, 100);
+  const weightProgressPct = latestAvgWeight != null && targetWeight > 0
+    ? Math.min((latestAvgWeight / targetWeight) * 100, 130)
+    : null;
+  const targetHarvestDate = batch.targetHarvestDate ? new Date(batch.targetHarvestDate) : null;
+  const daysToTargetHarvest = targetHarvestDate && !Number.isNaN(targetHarvestDate.getTime())
+    ? Math.ceil((targetHarvestDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+    : null;
+  const recentWaterRiskLogs = logs.filter((log: any) => {
+    const ph = Number(log.ph);
+    const ammonia = Number(log.ammonia);
+    const dissolvedO2 = Number(log.dissolvedO2);
+    return (
+      (Number.isFinite(ph) && (ph < 6.5 || ph > 8)) ||
+      (Number.isFinite(ammonia) && ammonia >= 0.5) ||
+      (Number.isFinite(dissolvedO2) && dissolvedO2 < 5)
+    );
+  }).length;
+
+  let score = 0;
+  if (weightProgressPct != null) score += Math.min(weightProgressPct * 0.62, 62);
+  else score += Math.min(cycleProgressPct * 0.24, 18);
+
+  if (weeksSinceStocking >= 18) score += 14;
+  else if (weeksSinceStocking >= 15) score += 10;
+  else if (weeksSinceStocking >= 12) score += 6;
+
+  if (daysToTargetHarvest != null) {
+    if (daysToTargetHarvest <= 7) score += 12;
+    else if (daysToTargetHarvest <= 21) score += 8;
+    else if (daysToTargetHarvest <= 35) score += 4;
+  }
+
+  if (survivalRate >= 85) score += 8;
+  else if (survivalRate >= 70) score += 4;
+
+  if (recentWaterRiskLogs === 0) score += 4;
+  else if (recentWaterRiskLogs >= 3) score -= 6;
+
+  const readinessScore = Math.max(0, Math.min(Math.round(score), 100));
+  const readinessStatus = readinessScore >= 80 ? "ready" : readinessScore >= 60 ? "approaching" : "growing";
+
+  return {
+    readinessScore,
+    readinessStatus,
+    latestAvgWeight,
+    latestFishCount,
+    latestGrowthDate: latestGrowthLog?.date ? new Date(latestGrowthLog.date).toISOString() : null,
+    targetWeight: targetWeight > 0 ? targetWeight : null,
+    weightProgressPct,
+    daysToTargetHarvest,
+    cycleProgressPct,
+  };
 }

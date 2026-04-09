@@ -8,7 +8,8 @@ import { Financial } from "@/models/Financial";
 import { FeedInventory } from "@/models/FeedInventory";
 import { User } from "@/models/User";
 import { getPlanConfig } from "@/lib/plans";
-import { buildReportBuckets, getReportRangeStart } from "@/lib/reports";
+import { analyzeHarvestReadiness, buildReportBuckets, getReportRangeStart } from "@/lib/reports";
+import { weeksSince } from "@/lib/utils";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -47,9 +48,20 @@ export async function GET(req: NextRequest) {
   const phValues = logs.map((l: any) => Number(l.ph)).filter((n: number) => Number.isFinite(n));
   const ammoniaValues = logs.map((l: any) => Number(l.ammonia)).filter((n: number) => Number.isFinite(n));
   const tempValues = logs.map((l: any) => Number(l.temperature)).filter((n: number) => Number.isFinite(n));
+  const dissolvedO2Values = logs.map((l: any) => Number(l.dissolvedO2)).filter((n: number) => Number.isFinite(n));
   const avgPh = phValues.length ? phValues.reduce((s: number, n: number) => s + n, 0) / phValues.length : null;
   const avgAmmonia = ammoniaValues.length ? ammoniaValues.reduce((s: number, n: number) => s + n, 0) / ammoniaValues.length : null;
   const avgTemp = tempValues.length ? tempValues.reduce((s: number, n: number) => s + n, 0) / tempValues.length : null;
+  const avgDissolvedO2 = dissolvedO2Values.length ? dissolvedO2Values.reduce((s: number, n: number) => s + n, 0) / dissolvedO2Values.length : null;
+
+  const growthLogs = logs.filter((l: any) => {
+    const fishCount = Number(l.fishCount);
+    const avgWeight = Number(l.avgWeight);
+    return Number.isFinite(fishCount) || Number.isFinite(avgWeight);
+  });
+  const latestGrowthSample = growthLogs
+    .slice()
+    .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] || null;
 
   const fishAlive = batches
     .filter((b: any) => b.status === "active" || b.status === "partial")
@@ -67,7 +79,12 @@ export async function GET(req: NextRequest) {
   const waterRiskLogs = logs.filter((l: any) => {
     const ph = Number(l.ph);
     const ammo = Number(l.ammonia);
-    return (Number.isFinite(ph) && (ph < 6.5 || ph > 8)) || (Number.isFinite(ammo) && ammo >= 0.5);
+    const dissolvedO2 = Number(l.dissolvedO2);
+    return (
+      (Number.isFinite(ph) && (ph < 6.5 || ph > 8)) ||
+      (Number.isFinite(ammo) && ammo >= 0.5) ||
+      (Number.isFinite(dissolvedO2) && dissolvedO2 < 5)
+    );
   }).length;
   const canAdvancedReporting = plan.key === "commercial";
 
@@ -138,7 +155,11 @@ export async function GET(req: NextRequest) {
 
       const ph = Number(log.ph);
       const ammo = Number(log.ammonia);
-      const isRisk = (Number.isFinite(ph) && (ph < 6.5 || ph > 8)) || (Number.isFinite(ammo) && ammo >= 0.5);
+      const dissolvedO2 = Number(log.dissolvedO2);
+      const isRisk =
+        (Number.isFinite(ph) && (ph < 6.5 || ph > 8)) ||
+        (Number.isFinite(ammo) && ammo >= 0.5) ||
+        (Number.isFinite(dissolvedO2) && dissolvedO2 < 5);
       if (isRisk) batchStats[batchId].waterRiskLogs += 1;
     }
 
@@ -155,6 +176,11 @@ export async function GET(req: NextRequest) {
         survivalRate: row.initialCount > 0 ? (row.currentCount / row.initialCount) * 100 : 0,
         feedPerFishKg: row.currentCount > 0 ? row.feedKg / row.currentCount : 0,
         avgPricePerKg: row.harvestedKg > 0 ? row.revenue / row.harvestedKg : 0,
+        ...analyzeHarvestReadiness(
+          batchMap.get(row.batchId),
+          logs.filter((log: any) => String(log.batchId || "") === row.batchId),
+          weeksSince(batchMap.get(row.batchId)?.stockingDate),
+        ),
       }))
       .sort((a, b) => b.revenue - a.revenue);
 
@@ -178,11 +204,17 @@ export async function GET(req: NextRequest) {
       .filter((row) => row.waterRiskLogs > 0)
       .sort((a, b) => b.waterRiskLogs - a.waterRiskLogs)
       .slice(0, 8);
+    const harvestReadiness = batchPerformance
+      .filter((row) => row.status === "active" || row.status === "partial")
+      .slice()
+      .sort((a, b) => b.readinessScore - a.readinessScore)
+      .slice(0, 8);
 
     advanced = {
       batchPerformance,
       channelPerformance,
       riskHotspots,
+      harvestReadiness,
       generatedAt: new Date().toISOString(),
       batchesAnalyzed: batchPerformance.length,
     };
@@ -206,7 +238,12 @@ export async function GET(req: NextRequest) {
       avgPh,
       avgAmmonia,
       avgTemp,
+      avgDissolvedO2,
       waterRiskLogs,
+      growthSampleCount: growthLogs.length,
+      latestGrowthSampleAt: latestGrowthSample?.date || null,
+      latestAvgWeight: Number.isFinite(Number(latestGrowthSample?.avgWeight)) ? Number(latestGrowthSample.avgWeight) : null,
+      latestFishCount: Number.isFinite(Number(latestGrowthSample?.fishCount)) ? Number(latestGrowthSample.fishCount) : null,
       purchasedKg,
       purchasedCost,
       remainingFeedKg,

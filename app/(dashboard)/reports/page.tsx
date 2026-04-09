@@ -17,7 +17,12 @@ type Summary = {
   avgPh: number | null;
   avgAmmonia: number | null;
   avgTemp: number | null;
+  avgDissolvedO2: number | null;
   waterRiskLogs: number;
+  growthSampleCount: number;
+  latestGrowthSampleAt: string | null;
+  latestAvgWeight: number | null;
+  latestFishCount: number | null;
   purchasedKg: number;
   purchasedCost: number;
   remainingFeedKg: number;
@@ -47,6 +52,15 @@ type BatchPerformanceRow = {
   survivalRate: number;
   feedPerFishKg: number;
   avgPricePerKg: number;
+  readinessScore: number;
+  readinessStatus: "growing" | "approaching" | "ready";
+  latestAvgWeight: number | null;
+  latestFishCount: number | null;
+  latestGrowthDate: string | null;
+  targetWeight: number | null;
+  weightProgressPct: number | null;
+  daysToTargetHarvest: number | null;
+  cycleProgressPct: number;
 };
 
 type ChannelPerformanceRow = {
@@ -61,6 +75,7 @@ type AdvancedPayload = {
   batchPerformance: BatchPerformanceRow[];
   channelPerformance: ChannelPerformanceRow[];
   riskHotspots: BatchPerformanceRow[];
+  harvestReadiness: BatchPerformanceRow[];
   generatedAt: string;
   batchesAnalyzed: number;
 };
@@ -249,7 +264,9 @@ export default function ReportsPage() {
         <div className="stat-card">
           <p className="text-xs text-pond-200/75 uppercase tracking-wider mb-2">Water Risk Logs</p>
           <p className={`font-mono text-2xl font-semibold ${summary.waterRiskLogs > 0 ? "text-danger" : "text-success"}`}>{summary.waterRiskLogs}</p>
-          <p className="text-xs text-pond-200/65 mt-1">Avg pH {summary.avgPh ? summary.avgPh.toFixed(2) : "—"}</p>
+          <p className="text-xs text-pond-200/65 mt-1">
+            Avg pH {summary.avgPh != null ? summary.avgPh.toFixed(2) : "—"} · Avg DO {summary.avgDissolvedO2 != null ? `${summary.avgDissolvedO2.toFixed(1)} mg/L` : "—"}
+          </p>
         </div>
       </div>
 
@@ -308,13 +325,41 @@ export default function ReportsPage() {
             <p className="font-mono text-lg text-pond-200 mt-1">{summary.harvestedBatches}</p>
           </div>
           <div className="rounded-xl p-3" style={{ background: "rgba(12, 12, 14,0.5)", border: "1px solid rgba(148, 163, 184,0.12)" }}>
-            <p className="text-xs text-pond-200/65">Mortality</p>
-            <p className="font-mono text-lg text-danger mt-1">{summary.mortality.toLocaleString()}</p>
+            <p className="text-xs text-pond-200/65">Growth Samples</p>
+            <p className="font-mono text-lg text-pond-200 mt-1">{summary.growthSampleCount}</p>
+            <p className="text-xs text-pond-200/65 mt-1">
+              {summary.latestGrowthSampleAt ? `Latest ${formatDateNg(summary.latestGrowthSampleAt)}` : "No recent growth check"}
+            </p>
           </div>
           <div className="rounded-xl p-3" style={{ background: "rgba(12, 12, 14,0.5)", border: "1px solid rgba(148, 163, 184,0.12)" }}>
-            <p className="text-xs text-pond-200/65">Avg Temp</p>
-            <p className="font-mono text-lg text-pond-200 mt-1">{summary.avgTemp != null ? `${summary.avgTemp.toFixed(1)}°C` : "—"}</p>
+            <p className="text-xs text-pond-200/65">Latest Growth Snapshot</p>
+            <p className="font-mono text-lg text-pond-200 mt-1">
+              {summary.latestAvgWeight != null ? `${summary.latestAvgWeight.toFixed(1)}g` : "—"}
+            </p>
+            <p className="text-xs text-pond-200/65 mt-1">
+              {summary.latestFishCount != null ? `${summary.latestFishCount.toLocaleString()} fish counted` : "Add fish count to strengthen timing confidence"}
+            </p>
           </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="glass-card px-4 py-3">
+          <p className="text-xs text-pond-200/65 uppercase tracking-wider">Water Stability</p>
+          <p className="mt-2 text-2xl font-display text-pond-100">
+            {summary.avgDissolvedO2 != null ? `${summary.avgDissolvedO2.toFixed(1)} mg/L` : "—"}
+          </p>
+          <p className="text-xs text-pond-200/65 mt-1">Average dissolved oxygen in the selected report range.</p>
+        </div>
+        <div className="glass-card px-4 py-3">
+          <p className="text-xs text-pond-200/65 uppercase tracking-wider">Avg Temperature</p>
+          <p className="mt-2 text-2xl font-display text-pond-100">{summary.avgTemp != null ? `${summary.avgTemp.toFixed(1)}°C` : "—"}</p>
+          <p className="text-xs text-pond-200/65 mt-1">Useful for spotting shifts that can affect appetite and oxygen stress.</p>
+        </div>
+        <div className="glass-card px-4 py-3">
+          <p className="text-xs text-pond-200/65 uppercase tracking-wider">Mortality In Range</p>
+          <p className="mt-2 text-2xl font-display text-danger">{summary.mortality.toLocaleString()}</p>
+          <p className="text-xs text-pond-200/65 mt-1">Confirmed deaths recorded during the selected reporting period.</p>
         </div>
       </div>
 
@@ -391,6 +436,44 @@ export default function ReportsPage() {
               </div>
             )}
           </div>
+
+          <div className="rounded-xl border border-pond-700/30 bg-black/20 p-4">
+            <p className="text-xs uppercase tracking-wider text-pond-300 mb-2">Harvest Readiness</p>
+            {advanced.harvestReadiness.length === 0 ? (
+              <p className="text-sm text-pond-200/70">No active batches are ready for harvest analysis yet.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                {advanced.harvestReadiness.map((row) => (
+                  <div key={`harvest-${row.batchId}`} className="rounded-lg border border-pond-700/30 bg-black/20 px-3 py-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm text-pond-100">{row.batchName}</p>
+                      <span className={`badge ${row.readinessStatus === "ready" ? "badge-green" : row.readinessStatus === "approaching" ? "badge-amber" : "badge-water"}`}>
+                        {row.readinessStatus}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xl font-display text-pond-100">{row.readinessScore}%</p>
+                    <div className="mt-2 space-y-1 text-xs text-pond-200/70">
+                      <p>
+                        Avg weight: <span className="font-mono text-pond-100">
+                          {row.latestAvgWeight != null ? `${row.latestAvgWeight.toFixed(0)}g` : "—"}
+                        </span>
+                      </p>
+                      <p>
+                        Target: <span className="font-mono text-pond-100">
+                          {row.targetWeight != null ? `${row.targetWeight.toFixed(0)}g` : "—"}
+                        </span>
+                      </p>
+                      <p>
+                        Timing: <span className="font-mono text-pond-100">
+                          {row.daysToTargetHarvest == null ? "No date" : row.daysToTargetHarvest <= 0 ? "Due now" : `${row.daysToTargetHarvest}d left`}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       ) : null}
 
@@ -398,7 +481,7 @@ export default function ReportsPage() {
         <div className="glass-card p-4 flex items-start gap-3 border border-red-400/25">
           <AlertTriangle className="w-4 h-4 text-danger mt-0.5" />
           <p className="text-sm text-pond-200/80">
-            {summary.waterRiskLogs} water-quality risk logs in selected range. Prioritize pH/ammonia checks and corrective actions.
+            {summary.waterRiskLogs} water-quality risk logs in selected range. Prioritize pH, ammonia, and dissolved oxygen checks with corrective follow-up.
           </p>
         </div>
       )}

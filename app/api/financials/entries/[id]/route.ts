@@ -113,6 +113,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const coll = type === "expense" ? fin.expenses : fin.revenue;
   const entry = coll.id(params.id);
   if (!entry) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+  if (type === "expense" && entry.source === "feed_purchase") {
+    return NextResponse.json(
+      {
+        error: "This feed expense is synced from Feed Inventory. Edit the purchase record there instead of changing it here.",
+      },
+      { status: 409 },
+    );
+  }
 
   if (type === "revenue") {
     const existingBatchId = entry.batchId ? String(entry.batchId) : "";
@@ -156,6 +164,14 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const coll = type === "expense" ? fin.expenses : fin.revenue;
   const entry = coll.id(params.id);
   if (!entry) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+  if (type === "expense" && entry.source === "feed_purchase") {
+    return NextResponse.json(
+      {
+        error: "This feed expense is synced from Feed Inventory. Delete or change the purchase record there instead of removing it here.",
+      },
+      { status: 409 },
+    );
+  }
 
   if (type === "revenue") {
     const existingBatchId = entry.batchId ? String(entry.batchId) : "";

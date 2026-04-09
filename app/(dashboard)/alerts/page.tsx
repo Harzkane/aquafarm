@@ -62,6 +62,12 @@ type StaffOption = {
   name: string;
 };
 
+type AlertPlaybook = {
+  action: string;
+  followUp: string;
+  verify: string;
+};
+
 const SEVERITY_FILTERS = ["all", "critical", "warning", "info"] as const;
 const SOURCE_LABELS: Record<string, string> = {
   dashboard: "Operations",
@@ -110,6 +116,72 @@ function summarizeStatusCounts(alerts: AlertRow[]) {
     acknowledged: alerts.filter((alert) => alert.status === "acknowledged").length,
     in_progress: alerts.filter((alert) => alert.status === "in_progress").length,
     muted: alerts.filter((alert) => alert.status === "muted").length,
+  };
+}
+
+function getAlertPlaybook(alert: Pick<AlertRow, "source" | "severity" | "title" | "message">): AlertPlaybook {
+  const title = `${alert.title} ${alert.message}`.toLowerCase();
+
+  if (alert.source === "water-quality") {
+    return {
+      action: "Check the affected tank now and correct aeration, water exchange, or treatment before the next feeding cycle.",
+      followUp: "Record a fresh water-quality reading after the intervention so the team can see whether conditions stabilized.",
+      verify: "Confirm pH, ammonia, and dissolved oxygen have returned to a safe range.",
+    };
+  }
+
+  if (alert.source === "mortality") {
+    return {
+      action: "Inspect the batch, isolate likely stress or disease causes, and confirm the latest mortality count with the farm team.",
+      followUp: "Log observations and update mortality again within the next check window if deaths continue.",
+      verify: "Mortality should stop accelerating and the affected batch should show stable water and feeding behavior.",
+    };
+  }
+
+  if (alert.source === "feed-inventory") {
+    return {
+      action: "Confirm remaining stock, place the next feed order, and review whether current feeding plans need ration adjustments.",
+      followUp: "Recheck feed runway after new purchases or major feed changes are logged.",
+      verify: "Enough feed should be available to cover the next planned operating window.",
+    };
+  }
+
+  if (alert.source === "calendar" || title.includes("overdue") || title.includes("due")) {
+    return {
+      action: "Complete the overdue farm task or confirm that it was already done outside the system.",
+      followUp: "Update the related batch or milestone record so planning stays trustworthy.",
+      verify: "The reminder should clear and the next milestone should have an updated due date.",
+    };
+  }
+
+  if (alert.source === "harvest" || title.includes("harvest")) {
+    return {
+      action: "Review current growth, buyer readiness, and tank conditions before confirming the next harvest move.",
+      followUp: "Log the decision outcome so pricing and stock position stay current.",
+      verify: "Harvest timing, fish count, and expected weight should all align with the planned sale window.",
+    };
+  }
+
+  if (alert.source === "financials" || alert.source === "billing") {
+    return {
+      action: "Check the affected payment or cost record now so farm operations are not surprised by an account issue.",
+      followUp: "Confirm the correction in billing or financials and note who handled it.",
+      verify: "The account status should return to normal and no duplicate cost issue should remain open.",
+    };
+  }
+
+  if (alert.severity === "critical") {
+    return {
+      action: "Assign an owner immediately and handle the highest-risk farm condition before moving to lower-priority work.",
+      followUp: "Post an updated check after the first intervention so the issue does not disappear without evidence.",
+      verify: "The alert should either downgrade or resolve after the corrective action is recorded.",
+    };
+  }
+
+  return {
+    action: "Review the linked area, confirm the issue is real, and assign the person responsible for the next action.",
+    followUp: "Recheck the condition after the next farm update to avoid stale unresolved alerts.",
+    verify: "Make sure the underlying signal improves before resolving the alert.",
   };
 }
 
@@ -330,13 +402,28 @@ export default function AlertsPage() {
                       <div className="mt-2 flex items-center gap-2 flex-wrap text-[11px] text-pond-300">
                         <span className={`badge ${severityBadge(incident.severity)}`}>{incident.severity}</span>
                         <span className={`badge ${statusBadge(incident.status)}`}>{incident.status}</span>
-                        {incident.entityType ? <span className="rounded-full border border-pond-700/30 bg-black/20 px-2 py-1 capitalize">{incident.entityType}</span> : null}
-                        {incident.alertCount ? <span>{incident.alertCount} linked alerts</span> : null}
-                        {incident.assignedToName ? <span>Assigned to {incident.assignedToName}</span> : null}
-                        <span>Updated {formatDateTimeNg(incident.updatedAt)}</span>
-                      </div>
+                      {incident.entityType ? <span className="rounded-full border border-pond-700/30 bg-black/20 px-2 py-1 capitalize">{incident.entityType}</span> : null}
+                      {incident.alertCount ? <span>{incident.alertCount} linked alerts</span> : null}
+                      {incident.assignedToName ? <span>Assigned to {incident.assignedToName}</span> : null}
+                      <span>Updated {formatDateTimeNg(incident.updatedAt)}</span>
                     </div>
-                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                    {(() => {
+                      const playbook = getAlertPlaybook({
+                        source: incident.source,
+                        severity: incident.severity,
+                        title: incident.title,
+                        message: incident.summary,
+                      });
+                      return (
+                        <div className="mt-3 grid gap-2 rounded-xl border border-pond-700/30 bg-black/20 p-3 text-xs text-pond-200/75 md:grid-cols-3">
+                          <p><span className="text-pond-100">Next step:</span> {playbook.action}</p>
+                          <p><span className="text-pond-100">Follow-up:</span> {playbook.followUp}</p>
+                          <p><span className="text-pond-100">Verify:</span> {playbook.verify}</p>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
                       <div className="w-48">
                         <select
                           className="field !py-1.5 !text-xs"
@@ -517,6 +604,16 @@ export default function AlertsPage() {
                       ) : null}
                       <span>Last seen: {formatDateTimeNg(alert.updatedAt)}</span>
                     </div>
+                    {(() => {
+                      const playbook = getAlertPlaybook(alert);
+                      return (
+                        <div className="mt-3 grid gap-2 rounded-xl border border-pond-700/30 bg-black/20 p-3 text-xs text-pond-200/75 md:grid-cols-3">
+                          <p><span className="text-pond-100">Next step:</span> {playbook.action}</p>
+                          <p><span className="text-pond-100">Follow-up:</span> {playbook.followUp}</p>
+                          <p><span className="text-pond-100">Verify:</span> {playbook.verify}</p>
+                        </div>
+                      );
+                    })()}
                     {alert.resolutionNote ? (
                       <p className="mt-2 text-[11px] text-pond-200/65">Resolution note: {alert.resolutionNote}</p>
                     ) : null}

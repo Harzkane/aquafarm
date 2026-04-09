@@ -6,6 +6,9 @@ const ExpenseSchema = new Schema({
   amount:      { type: Number, required: true },
   date:        { type: Date, default: Date.now },
   batchId:     { type: Schema.Types.ObjectId, ref: "Batch" },
+  source:      { type: String, enum: ["manual", "feed_purchase"], default: "manual" },
+  sourceRef:   String,
+  sourceLabel: String,
 });
 
 const RevenueSchema = new Schema({

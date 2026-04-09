@@ -28,7 +28,12 @@ export const healthRules: AlertRule[] = [
     const waterRisk3d = ctx.logs3d.filter((log) => {
       const ph = Number(log.ph);
       const ammonia = Number(log.ammonia);
-      return (Number.isFinite(ph) && (ph < 6.5 || ph > 8)) || (Number.isFinite(ammonia) && ammonia >= 0.5);
+      const dissolvedO2 = Number(log.dissolvedO2);
+      return (
+        (Number.isFinite(ph) && (ph < 6.5 || ph > 8)) ||
+        (Number.isFinite(ammonia) && ammonia >= 0.5) ||
+        (Number.isFinite(dissolvedO2) && dissolvedO2 < 5)
+      );
     }).length;
 
     if (waterRisk3d > 0) {
@@ -37,7 +42,7 @@ export const healthRules: AlertRule[] = [
         source: "water-quality",
         severity: waterRisk3d >= 3 ? "critical" : "warning",
         title: "Water quality out of range",
-        message: `${waterRisk3d} recent log${waterRisk3d > 1 ? "s show" : " shows"} pH/ammonia risk in the last 3 days.`,
+        message: `${waterRisk3d} recent log${waterRisk3d > 1 ? "s show" : " shows"} pH, ammonia, or dissolved oxygen risk in the last 3 days.`,
         href: "/water-quality",
         meta: buildMeta(undefined, {
           entityType: "farm",
@@ -68,4 +73,3 @@ export const healthRules: AlertRule[] = [
     return alerts;
   },
 ];
-

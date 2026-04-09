@@ -14,6 +14,9 @@ interface ActionItem {
   title: string;
   detail: string;
   href: string;
+  category: "logging" | "planning" | "health" | "inventory" | "setup" | "harvest";
+  actionLabel: string;
+  whyNow: string;
 }
 
 type ChartPoint = {
@@ -43,7 +46,29 @@ interface Props {
     totalMortality30d: number;
     totalExpenses: number;
     totalRevenue: number;
+    readinessScore: number;
+    readinessStatus: "growing" | "approaching" | "ready";
+    latestAvgWeight: number | null;
+    latestFishCount: number | null;
+    latestGrowthDate: string | null;
+    targetWeight: number | null;
+    weightProgressPct: number | null;
+    daysToTargetHarvest: number | null;
+    cycleProgressPct: number;
     chartDataByRange: Record<string, ChartPoint[]>;
+  }>;
+  batchReadiness: Array<{
+    batchId: string;
+    batchName: string;
+    readinessScore: number;
+    readinessStatus: "growing" | "approaching" | "ready";
+    latestAvgWeight: number | null;
+    latestFishCount: number | null;
+    latestGrowthDate: string | null;
+    targetWeight: number | null;
+    weightProgressPct: number | null;
+    daysToTargetHarvest: number | null;
+    cycleProgressPct: number;
   }>;
   tankSnapshots: {
     all: Array<{
@@ -121,7 +146,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function DashboardClient({
   totalFish, totalInitial, totalFeedToday, totalMortality30d,
   totalExpenses, totalRevenue, activeBatches, totalTanks,
-  availableTimeframes, chartDataByRange, batchSummaries, tankSnapshots, tankHealthTrend, recentMovements, actions, batches, tanks, farmName, userName, plan,
+  availableTimeframes, chartDataByRange, batchSummaries, batchReadiness, tankSnapshots, tankHealthTrend, recentMovements, actions, batches, tanks, farmName, userName, plan,
 }: Props) {
   const timeframeOptions = TIMEFRAME_OPTIONS.filter((option) => availableTimeframes.includes(option.value));
   const defaultTimeframe = (timeframeOptions[timeframeOptions.length - 1]?.value || "14") as DashboardTimeframe;
@@ -133,6 +158,10 @@ export default function DashboardClient({
   const selectedBatchSummary = useMemo(
     () => batchSummaries.find((summary) => summary.batchId === selectedBatchId) || null,
     [batchSummaries, selectedBatchId],
+  );
+  const selectedBatchReadiness = useMemo(
+    () => batchReadiness.find((summary) => summary.batchId === selectedBatchId) || null,
+    [batchReadiness, selectedBatchId],
   );
   const selectedBatch = useMemo(
     () => batches.find((batch) => String(batch._id) === selectedBatchId) || null,
@@ -189,14 +218,29 @@ export default function DashboardClient({
   const visibleActions = (isFree
     ? actions.filter((a) => !FREE_LOCKED_ACTION_PREFIXES.some((prefix) => a.href.startsWith(prefix)))
     : actions
-  ).slice(0, 4);
+  ).slice(0, 6);
   const urgentCount = visibleActions.filter((action) => action.level === "danger" || action.level === "warning").length;
+  const dangerCount = visibleActions.filter((action) => action.level === "danger").length;
+  const infoCount = visibleActions.filter((action) => action.level === "info").length;
   const todaySummary =
     batches.length === 0
       ? "Set up your first batch to start building a reliable operating record."
       : urgentCount > 0
         ? `${urgentCount} item${urgentCount === 1 ? "" : "s"} need attention today.`
         : "No urgent issues detected right now. Keep logging consistently.";
+  const readinessFocus = selectedBatchReadiness || batchReadiness[0] || null;
+  const readinessStatusLabel =
+    readinessFocus?.readinessStatus === "ready"
+      ? "Ready now"
+      : readinessFocus?.readinessStatus === "approaching"
+        ? "Approaching"
+        : "Growing";
+  const readinessStatusClass =
+    readinessFocus?.readinessStatus === "ready"
+      ? "badge-green"
+      : readinessFocus?.readinessStatus === "approaching"
+        ? "badge-amber"
+        : "badge-water";
 
   const kpis = isFree ? [
     {
@@ -301,10 +345,20 @@ export default function DashboardClient({
       {/* Action required */}
       {visibleActions.length > 0 && (
         <div className="glass-card p-5 space-y-3">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-warning" />
-            <h2 className="section-title !text-base">Needs Attention</h2>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-warning" />
+              <h2 className="section-title !text-base">Command Center</h2>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <span className="badge badge-red">{dangerCount} critical</span>
+              <span className="badge badge-amber">{urgentCount - dangerCount} urgent</span>
+              <span className="badge badge-water">{infoCount} planned</span>
+            </div>
           </div>
+          <p className="text-xs text-pond-200/65">
+            Start here each day. These priorities are generated from logs, milestones, mortality, water risk, harvest timing, and feed stock.
+          </p>
           <div className="space-y-2.5">
             {visibleActions.map((action, i) => (
               <Link
@@ -314,16 +368,27 @@ export default function DashboardClient({
                 style={{ background: "rgba(12, 12, 14, 0.7)", border: "1px solid rgba(148, 163, 184, 0.16)" }}
               >
                 <div className="flex items-center justify-between gap-3">
-                  <p
-                    className={`text-sm font-medium ${
-                      action.level === "danger" ? "text-danger" : action.level === "warning" ? "text-warning" : "text-pond-100"
-                    }`}
-                  >
-                    {action.title}
-                  </p>
-                  <span className="text-xs text-pond-200/65">Open</span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`badge text-[10px] ${
+                        action.level === "danger" ? "badge-red" : action.level === "warning" ? "badge-amber" : "badge-water"
+                      }`}>
+                        {action.level === "danger" ? "Critical" : action.level === "warning" ? "Urgent" : "Planned"}
+                      </span>
+                      <span className="text-[10px] uppercase tracking-wider text-pond-300">{action.category}</span>
+                    </div>
+                    <p
+                      className={`text-sm font-medium mt-2 ${
+                        action.level === "danger" ? "text-danger" : action.level === "warning" ? "text-warning" : "text-pond-100"
+                      }`}
+                    >
+                      {action.title}
+                    </p>
+                  </div>
+                  <span className="text-xs text-pond-200/65">{action.actionLabel}</span>
                 </div>
-                <p className="text-xs text-pond-200/65 mt-1">{action.detail}</p>
+                <p className="text-xs text-pond-200/65 mt-2">{action.detail}</p>
+                <p className="text-[11px] text-pond-300 mt-1">Why now: {action.whyNow}</p>
               </Link>
             ))}
           </div>
@@ -392,6 +457,83 @@ export default function DashboardClient({
           </div>
         ))}
       </div>
+
+      {readinessFocus ? (
+        <div className="glass-card p-5">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="section-title !text-base">Harvest Readiness</h2>
+              <p className="text-xs text-pond-200/65 mt-1">
+                Uses recent growth samples, target weight, timing, and current survival to guide harvest review.
+              </p>
+            </div>
+            <span className={`badge ${readinessStatusClass}`}>{readinessStatusLabel}</span>
+          </div>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-[1.2fr,0.8fr] gap-4">
+            <div className="rounded-xl px-4 py-4" style={{ background: "rgba(12, 12, 14,0.45)", border: "1px solid rgba(148, 163, 184,0.1)" }}>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-pond-100">{readinessFocus.batchName || selectedBatch?.name || scopeLabel}</p>
+                  <p className="text-xs text-pond-200/65 mt-1">
+                    {readinessFocus.latestGrowthDate
+                      ? `Latest growth sample recorded ${new Date(readinessFocus.latestGrowthDate).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}.`
+                      : "No recent growth sample recorded yet."}
+                  </p>
+                </div>
+                <p className="font-display text-3xl text-pond-100">{readinessFocus.readinessScore}%</p>
+              </div>
+              <div className="progress-track mt-4">
+                <div className="progress-fill" style={{ width: `${Math.min(readinessFocus.readinessScore, 100)}%` }} />
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-pond-200/70">
+                <p>
+                  Avg weight: <span className="font-mono text-pond-100">
+                    {readinessFocus.latestAvgWeight != null ? `${readinessFocus.latestAvgWeight.toFixed(0)}g` : "—"}
+                  </span>
+                </p>
+                <p>
+                  Target: <span className="font-mono text-pond-100">
+                    {readinessFocus.targetWeight != null ? `${readinessFocus.targetWeight.toFixed(0)}g` : "—"}
+                  </span>
+                </p>
+                <p>
+                  Weight progress: <span className="font-mono text-pond-100">
+                    {readinessFocus.weightProgressPct != null ? `${Math.min(readinessFocus.weightProgressPct, 999).toFixed(0)}%` : "—"}
+                  </span>
+                </p>
+                <p>
+                  Last count: <span className="font-mono text-pond-100">
+                    {readinessFocus.latestFishCount != null ? readinessFocus.latestFishCount.toLocaleString() : "—"}
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="rounded-xl px-4 py-3" style={{ background: "rgba(12, 12, 14,0.45)", border: "1px solid rgba(148, 163, 184,0.1)" }}>
+                <p className="text-xs uppercase tracking-wider text-pond-300">Timing Signal</p>
+                <p className="mt-1 text-sm text-pond-100">
+                  {readinessFocus.daysToTargetHarvest == null
+                    ? "No target harvest date set."
+                    : readinessFocus.daysToTargetHarvest <= 0
+                      ? "Target harvest date has arrived."
+                      : `${readinessFocus.daysToTargetHarvest} day${readinessFocus.daysToTargetHarvest === 1 ? "" : "s"} to target harvest date.`}
+                </p>
+              </div>
+              <div className="rounded-xl px-4 py-3" style={{ background: "rgba(12, 12, 14,0.45)", border: "1px solid rgba(148, 163, 184,0.1)" }}>
+                <p className="text-xs uppercase tracking-wider text-pond-300">Next Best Move</p>
+                <p className="mt-1 text-sm text-pond-100">
+                  {readinessFocus.readinessStatus === "ready"
+                    ? "Review harvest timing, buyers, and tank turnover now."
+                    : readinessFocus.readinessStatus === "approaching"
+                      ? "Record a fresh growth sample and confirm pricing options soon."
+                      : "Keep feeding and sampling consistently until weight and timing move closer to target."}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {scopedTanks.length > 0 && (
         <div className="grid grid-cols-1 xl:grid-cols-[1.2fr,0.8fr] gap-4">
@@ -627,6 +769,13 @@ export default function DashboardClient({
               const { phase, next, nextWeek } = getBatchPhase(weeks);
               const survival = calcSurvivalRate(batch.currentCount, batch.initialCount);
               const progress = Math.min((weeks / 18) * 100, 100);
+              const readiness = batchReadiness.find((item) => item.batchId === String(batch._id)) || null;
+              const readinessBadgeClass =
+                readiness?.readinessStatus === "ready"
+                  ? "badge-green"
+                  : readiness?.readinessStatus === "approaching"
+                    ? "badge-amber"
+                    : "badge-water";
               return (
                 <div key={batch._id} className="flex items-center gap-4 p-4 rounded-xl"
                      style={{ background: "rgba(12, 12, 14,0.5)", border: "1px solid rgba(148, 163, 184,0.12)" }}>
@@ -638,6 +787,7 @@ export default function DashboardClient({
                     <div className="flex items-center gap-2 mb-1">
                       <p className="font-medium text-sm text-pond-100 truncate">{batch.name}</p>
                       <span className="badge badge-green text-xs">{phase}</span>
+                      {readiness ? <span className={`badge text-xs ${readinessBadgeClass}`}>{readiness.readinessStatus}</span> : null}
                     </div>
                     <div className="progress-track mb-1">
                       <div className="progress-fill" style={{ width: `${progress}%` }} />
@@ -648,6 +798,12 @@ export default function DashboardClient({
                       <span>{batch.currentCount} fish</span>
                       <span>·</span>
                       <span>{survival}% survival</span>
+                      {readiness?.latestAvgWeight != null ? (
+                        <>
+                          <span>·</span>
+                          <span>{readiness.latestAvgWeight.toFixed(0)}g avg weight</span>
+                        </>
+                      ) : null}
                     </div>
                   </div>
                   <div className="hidden sm:flex flex-col items-end gap-1">
@@ -655,6 +811,9 @@ export default function DashboardClient({
                       <Clock className="w-3 h-3" />
                       <span>{next}</span>
                     </div>
+                    {readiness ? (
+                      <p className="text-xs text-pond-300">{readiness.readinessScore}% ready</p>
+                    ) : null}
                   </div>
                 </div>
               );
