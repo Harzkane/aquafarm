@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
     })
       .sort({ severityRank: -1, updatedAt: -1 })
       .limit(8)
-      .select("title summary severity status source href entityType alertCount assignedToUserId assignedToName updatedAt")
+      .select("title summary severity status source href entityType alertCount assignedToUserId assignedToName nextStepNote followUpDueAt verificationStatus verificationNote verifiedAt updatedAt")
       .lean<any[]>();
   } else {
     const now = new Date();

@@ -21,6 +21,15 @@ const AlertIncidentSchema = new Schema({
   active: { type: Boolean, default: true, index: true },
   assignedToUserId: { type: Schema.Types.ObjectId, ref: "User", default: null },
   assignedToName: { type: String, default: "" },
+  nextStepNote: { type: String, default: "" },
+  followUpDueAt: { type: Date, default: null },
+  verificationStatus: {
+    type: String,
+    enum: ["pending", "scheduled", "verified", "needs_attention"],
+    default: "pending",
+  },
+  verificationNote: { type: String, default: "" },
+  verifiedAt: { type: Date, default: null },
   resolvedAt: { type: Date, default: null },
   lastTriggeredAt: { type: Date, default: Date.now },
   createdAt: { type: Date, default: Date.now },
@@ -32,4 +41,3 @@ AlertIncidentSchema.index({ userId: 1, active: 1, severityRank: -1, updatedAt: -
 
 export const AlertIncident =
   models.AlertIncident || model("AlertIncident", AlertIncidentSchema);
-

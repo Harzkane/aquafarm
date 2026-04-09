@@ -8,6 +8,7 @@ import { AlertNotification } from "@/models/AlertNotification";
 import { User } from "@/models/User";
 
 type WorkflowStatus = "new" | "acknowledged" | "in_progress" | "resolved" | "muted";
+type VerificationStatus = "pending" | "scheduled" | "verified" | "needs_attention";
 
 async function getIncidentActor() {
   const session = await getServerSession(authOptions);
@@ -44,6 +45,13 @@ function normalizeStatus(value: unknown): WorkflowStatus | "" {
   return "";
 }
 
+function normalizeVerificationStatus(value: unknown): VerificationStatus | "" {
+  if (value === "pending" || value === "scheduled" || value === "verified" || value === "needs_attention") {
+    return value;
+  }
+  return "";
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionResult = await getIncidentActor();
   if (!("ownerUserId" in sessionResult)) {
@@ -64,8 +72,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   const status = normalizeStatus(body?.status);
+  const verificationStatus = normalizeVerificationStatus(body?.verificationStatus);
   const assignedToUserIdRaw = String(body?.assignedToUserId || "").trim();
   const resolutionNote = String(body?.resolutionNote || "").trim().slice(0, 500);
+  const nextStepNote = typeof body?.nextStepNote === "string" ? body.nextStepNote.trim().slice(0, 280) : null;
+  const verificationNote = typeof body?.verificationNote === "string" ? body.verificationNote.trim().slice(0, 280) : null;
+  const followUpDueAtRaw = body?.followUpDueAt;
 
   const incident = await AlertIncident.findOne({ _id: params.id, userId: ownerUserId });
   if (!incident) return NextResponse.json({ error: "Incident not found" }, { status: 404 });
@@ -99,6 +111,32 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     incident.assignedToName = "";
   }
 
+  if (nextStepNote !== null) {
+    incident.nextStepNote = nextStepNote;
+  }
+  if (verificationNote !== null) {
+    incident.verificationNote = verificationNote;
+  }
+  if (followUpDueAtRaw !== undefined) {
+    if (followUpDueAtRaw === null || followUpDueAtRaw === "") {
+      incident.followUpDueAt = null;
+    } else {
+      const parsed = new Date(followUpDueAtRaw);
+      if (Number.isNaN(parsed.getTime())) {
+        return NextResponse.json({ error: "Invalid follow-up date" }, { status: 400 });
+      }
+      incident.followUpDueAt = parsed;
+    }
+  }
+  if (verificationStatus) {
+    incident.verificationStatus = verificationStatus;
+    if (verificationStatus === "verified") {
+      incident.verifiedAt = now;
+    } else if (verificationStatus === "pending") {
+      incident.verifiedAt = null;
+    }
+  }
+
   if (status) {
     incident.status = status;
     if (status === "resolved") {
@@ -116,6 +154,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (assigneeId !== undefined) {
     alertSet.assignedToUserId = assigneeId;
     alertSet.assignedToName = assigneeName;
+  }
+  if (nextStepNote !== null) alertSet.nextStepNote = incident.nextStepNote;
+  if (verificationNote !== null) alertSet.verificationNote = incident.verificationNote;
+  if (followUpDueAtRaw !== undefined) alertSet.followUpDueAt = incident.followUpDueAt;
+  if (verificationStatus) {
+    alertSet.verificationStatus = incident.verificationStatus;
+    alertSet.verifiedAt = incident.verifiedAt;
   }
   if (status) {
     alertSet.status = status;
@@ -161,6 +206,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       active: Boolean(incident.active),
       assignedToUserId: incident.assignedToUserId ? String(incident.assignedToUserId) : "",
       assignedToName: String(incident.assignedToName || ""),
+      nextStepNote: String(incident.nextStepNote || ""),
+      followUpDueAt: incident.followUpDueAt ? new Date(incident.followUpDueAt).toISOString() : null,
+      verificationStatus: String(incident.verificationStatus || "pending"),
+      verificationNote: String(incident.verificationNote || ""),
+      verifiedAt: incident.verifiedAt ? new Date(incident.verifiedAt).toISOString() : null,
     },
   });
 }

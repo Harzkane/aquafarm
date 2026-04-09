@@ -19,6 +19,11 @@ type AlertRow = {
   assignedToUserId?: string;
   assignedToName?: string;
   resolutionNote?: string;
+  nextStepNote?: string;
+  followUpDueAt?: string | null;
+  verificationStatus?: "pending" | "scheduled" | "verified" | "needs_attention";
+  verificationNote?: string;
+  verifiedAt?: string | null;
   meta?: Record<string, unknown>;
 };
 
@@ -49,6 +54,11 @@ type AlertResponse = {
     alertCount?: number;
     assignedToUserId?: string;
     assignedToName?: string;
+    nextStepNote?: string;
+    followUpDueAt?: string | null;
+    verificationStatus?: "pending" | "scheduled" | "verified" | "needs_attention";
+    verificationNote?: string;
+    verifiedAt?: string | null;
     updatedAt: string;
   }>;
   analytics?: {
@@ -183,6 +193,20 @@ function getAlertPlaybook(alert: Pick<AlertRow, "source" | "severity" | "title" 
     followUp: "Recheck the condition after the next farm update to avoid stale unresolved alerts.",
     verify: "Make sure the underlying signal improves before resolving the alert.",
   };
+}
+
+function formatDateInputValue(value?: string | null) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().split("T")[0];
+}
+
+function verificationBadge(status?: AlertRow["verificationStatus"]) {
+  if (status === "verified") return "badge-green";
+  if (status === "needs_attention") return "badge-red";
+  if (status === "scheduled") return "badge-amber";
+  return "badge-water";
 }
 
 export default function AlertsPage() {
@@ -422,6 +446,47 @@ export default function AlertsPage() {
                         </div>
                       );
                     })()}
+                    <div className="mt-3 grid gap-3 rounded-xl border border-pond-700/30 bg-black/20 p-3 md:grid-cols-3">
+                      <div>
+                        <label className="mb-1.5 block text-[11px] font-medium text-pond-300">Tracked next step</label>
+                        <input
+                          className="field !py-2 !text-xs"
+                          defaultValue={incident.nextStepNote || ""}
+                          placeholder="Record what should happen next"
+                          onBlur={(e) => updateIncident(incident._id, { nextStepNote: e.target.value })}
+                          disabled={busyIncidentId === incident._id}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-[11px] font-medium text-pond-300">Follow-up due</label>
+                        <input
+                          className="field !py-2 !text-xs"
+                          type="date"
+                          defaultValue={formatDateInputValue(incident.followUpDueAt)}
+                          onChange={(e) => updateIncident(incident._id, { followUpDueAt: e.target.value || null })}
+                          disabled={busyIncidentId === incident._id}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-[11px] font-medium text-pond-300">Verification</label>
+                        <select
+                          className="field !py-2 !text-xs"
+                          value={incident.verificationStatus || "pending"}
+                          onChange={(e) => updateIncident(incident._id, { verificationStatus: e.target.value })}
+                          disabled={busyIncidentId === incident._id}
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="scheduled">Scheduled</option>
+                          <option value="verified">Verified</option>
+                          <option value="needs_attention">Needs attention</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2 flex-wrap text-[11px] text-pond-300">
+                      <span className={`badge ${verificationBadge(incident.verificationStatus)}`}>{incident.verificationStatus || "pending"}</span>
+                      {incident.followUpDueAt ? <span>Follow-up due {formatDateTimeNg(incident.followUpDueAt)}</span> : null}
+                      {incident.verifiedAt ? <span>Verified {formatDateTimeNg(incident.verifiedAt)}</span> : null}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap justify-end">
                       <div className="w-48">
@@ -614,6 +679,47 @@ export default function AlertsPage() {
                         </div>
                       );
                     })()}
+                    <div className="mt-3 grid gap-3 rounded-xl border border-pond-700/30 bg-black/20 p-3 md:grid-cols-3">
+                      <div>
+                        <label className="mb-1.5 block text-[11px] font-medium text-pond-300">Tracked next step</label>
+                        <input
+                          className="field !py-2 !text-xs"
+                          defaultValue={alert.nextStepNote || ""}
+                          placeholder="Record what should happen next"
+                          onBlur={(e) => updateAlert(alert._id, { nextStepNote: e.target.value })}
+                          disabled={busyId === alert._id}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-[11px] font-medium text-pond-300">Follow-up due</label>
+                        <input
+                          className="field !py-2 !text-xs"
+                          type="date"
+                          defaultValue={formatDateInputValue(alert.followUpDueAt)}
+                          onChange={(e) => updateAlert(alert._id, { followUpDueAt: e.target.value || null })}
+                          disabled={busyId === alert._id}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-[11px] font-medium text-pond-300">Verification</label>
+                        <select
+                          className="field !py-2 !text-xs"
+                          value={alert.verificationStatus || "pending"}
+                          onChange={(e) => updateAlert(alert._id, { verificationStatus: e.target.value })}
+                          disabled={busyId === alert._id}
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="scheduled">Scheduled</option>
+                          <option value="verified">Verified</option>
+                          <option value="needs_attention">Needs attention</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2 flex-wrap text-[11px] text-pond-300">
+                      <span className={`badge ${verificationBadge(alert.verificationStatus)}`}>{alert.verificationStatus || "pending"}</span>
+                      {alert.followUpDueAt ? <span>Follow-up due {formatDateTimeNg(alert.followUpDueAt)}</span> : null}
+                      {alert.verifiedAt ? <span>Verified {formatDateTimeNg(alert.verifiedAt)}</span> : null}
+                    </div>
                     {alert.resolutionNote ? (
                       <p className="mt-2 text-[11px] text-pond-200/65">Resolution note: {alert.resolutionNote}</p>
                     ) : null}

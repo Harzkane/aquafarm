@@ -7,6 +7,7 @@ import { AlertNotification } from "@/models/AlertNotification";
 import { User } from "@/models/User";
 
 type AlertStatus = "new" | "acknowledged" | "in_progress" | "resolved" | "muted";
+type VerificationStatus = "pending" | "scheduled" | "verified" | "needs_attention";
 
 async function getAlertActor() {
   const session = await getServerSession(authOptions);
@@ -44,6 +45,13 @@ function normalizeStatus(value: unknown): AlertStatus | "" {
   return "";
 }
 
+function normalizeVerificationStatus(value: unknown): VerificationStatus | "" {
+  if (value === "pending" || value === "scheduled" || value === "verified" || value === "needs_attention") {
+    return value;
+  }
+  return "";
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const sessionResult = await getAlertActor();
   if (!("ownerUserId" in sessionResult)) {
@@ -64,8 +72,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   const status = normalizeStatus(body?.status);
+  const verificationStatus = normalizeVerificationStatus(body?.verificationStatus);
   const assignedToUserIdRaw = String(body?.assignedToUserId || "").trim();
   const resolutionNote = String(body?.resolutionNote || "").trim().slice(0, 500);
+  const nextStepNote = typeof body?.nextStepNote === "string" ? body.nextStepNote.trim().slice(0, 280) : null;
+  const verificationNote = typeof body?.verificationNote === "string" ? body.verificationNote.trim().slice(0, 280) : null;
+  const followUpDueAtRaw = body?.followUpDueAt;
 
   const alert = await AlertNotification.findOne({
     _id: params.id,
@@ -74,6 +86,31 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!alert) return NextResponse.json({ error: "Alert not found" }, { status: 404 });
 
   const now = new Date();
+  if (nextStepNote !== null) {
+    alert.nextStepNote = nextStepNote;
+  }
+  if (verificationNote !== null) {
+    alert.verificationNote = verificationNote;
+  }
+  if (followUpDueAtRaw !== undefined) {
+    if (followUpDueAtRaw === null || followUpDueAtRaw === "") {
+      alert.followUpDueAt = null;
+    } else {
+      const parsed = new Date(followUpDueAtRaw);
+      if (Number.isNaN(parsed.getTime())) {
+        return NextResponse.json({ error: "Invalid follow-up date" }, { status: 400 });
+      }
+      alert.followUpDueAt = parsed;
+    }
+  }
+  if (verificationStatus) {
+    alert.verificationStatus = verificationStatus;
+    if (verificationStatus === "verified") {
+      alert.verifiedAt = now;
+    } else if (verificationStatus === "pending") {
+      alert.verifiedAt = null;
+    }
+  }
 
   if (assignedToUserIdRaw !== "") {
     if (!Types.ObjectId.isValid(assignedToUserIdRaw)) {
@@ -143,6 +180,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       assignedToUserId: alert.assignedToUserId ? String(alert.assignedToUserId) : "",
       assignedToName: String(alert.assignedToName || ""),
       resolutionNote: String(alert.resolutionNote || ""),
+      nextStepNote: String(alert.nextStepNote || ""),
+      followUpDueAt: alert.followUpDueAt ? new Date(alert.followUpDueAt).toISOString() : null,
+      verificationStatus: String(alert.verificationStatus || "pending"),
+      verificationNote: String(alert.verificationNote || ""),
+      verifiedAt: alert.verifiedAt ? new Date(alert.verifiedAt).toISOString() : null,
     },
   });
 }

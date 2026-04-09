@@ -86,7 +86,7 @@ export async function collectAlertCandidates(userId: string, now = new Date()) {
 
 async function syncAlertIncidents(userId: string, now = new Date()) {
   const activeAlerts = await AlertNotification.find({ userId, active: true })
-    .select("key source severity severityRank title message href meta status assignedToUserId assignedToName updatedAt createdAt")
+    .select("key source severity severityRank title message href meta status assignedToUserId assignedToName nextStepNote followUpDueAt verificationStatus verificationNote verifiedAt updatedAt createdAt")
     .lean<any[]>();
 
   const groups = new Map<string, any[]>();
@@ -97,7 +97,7 @@ async function syncAlertIncidents(userId: string, now = new Date()) {
   }
 
   const existingIncidents = await AlertIncident.find({ userId })
-    .select("incidentKey active")
+    .select("incidentKey active nextStepNote followUpDueAt verificationStatus verificationNote verifiedAt")
     .lean<any[]>();
   const activeIncidentKeys = new Set(groups.keys());
   const ops: any[] = [];
@@ -106,6 +106,10 @@ async function syncAlertIncidents(userId: string, now = new Date()) {
     const sorted = [...alerts].sort((a, b) => Number(b.severityRank || 0) - Number(a.severityRank || 0) || new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
     const primary = sorted[0];
     const preservedAssignee = sorted.find((item) => item.assignedToUserId);
+    const preservedWorkflow = sorted.find(
+      (item) => item.nextStepNote || item.followUpDueAt || item.verificationStatus === "scheduled" || item.verificationStatus === "verified" || item.verificationStatus === "needs_attention" || item.verificationNote,
+    );
+    const existingIncident = existingIncidents.find((row) => String(row.incidentKey) === incidentKey);
     const status =
       sorted.some((item) => item.status === "in_progress") ? "in_progress"
         : sorted.some((item) => item.status === "acknowledged") ? "acknowledged"
@@ -129,6 +133,11 @@ async function syncAlertIncidents(userId: string, now = new Date()) {
             alertCount: sorted.length,
             assignedToUserId: preservedAssignee?.assignedToUserId || null,
             assignedToName: preservedAssignee?.assignedToName || "",
+            nextStepNote: String(preservedWorkflow?.nextStepNote || existingIncident?.nextStepNote || ""),
+            followUpDueAt: preservedWorkflow?.followUpDueAt || existingIncident?.followUpDueAt || null,
+            verificationStatus: String(preservedWorkflow?.verificationStatus || existingIncident?.verificationStatus || "pending"),
+            verificationNote: String(preservedWorkflow?.verificationNote || existingIncident?.verificationNote || ""),
+            verifiedAt: preservedWorkflow?.verifiedAt || existingIncident?.verifiedAt || null,
             updatedAt: now,
             lastTriggeredAt: now,
           },
@@ -166,7 +175,7 @@ async function syncAlertIncidents(userId: string, now = new Date()) {
 
 export async function syncAlertsForUser(userId: string, candidates: AlertCandidate[], now = new Date()) {
   const existing = await AlertNotification.find({ userId })
-    .select("key active status assignedToUserId assignedToName")
+    .select("key active status assignedToUserId assignedToName nextStepNote followUpDueAt verificationStatus verificationNote verifiedAt")
     .lean<any[]>();
   const existingMap = new Map(existing.map((row) => [String(row.key), row]));
   const activeKeys = new Set(candidates.map((candidate) => candidate.key));
@@ -201,6 +210,9 @@ export async function syncAlertsForUser(userId: string, candidates: AlertCandida
       setPayload.resolvedByUserId = null;
       setPayload.resolvedByName = "";
       setPayload.resolutionNote = "";
+      setPayload.verificationStatus = "pending";
+      setPayload.verificationNote = "";
+      setPayload.verifiedAt = null;
     }
     operations.push({
       updateOne: {
@@ -211,6 +223,11 @@ export async function syncAlertsForUser(userId: string, candidates: AlertCandida
             createdAt: now,
             assignedToUserId: null,
             assignedToName: "",
+            nextStepNote: "",
+            followUpDueAt: null,
+            verificationStatus: "pending",
+            verificationNote: "",
+            verifiedAt: null,
           },
           $inc: { triggerCount: 1 },
         },

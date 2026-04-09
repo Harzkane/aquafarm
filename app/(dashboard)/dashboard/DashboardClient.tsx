@@ -14,7 +14,7 @@ interface ActionItem {
   title: string;
   detail: string;
   href: string;
-  category: "logging" | "planning" | "health" | "inventory" | "setup" | "harvest";
+  category: "logging" | "planning" | "health" | "inventory" | "setup" | "harvest" | "alerts";
   actionLabel: string;
   whyNow: string;
 }

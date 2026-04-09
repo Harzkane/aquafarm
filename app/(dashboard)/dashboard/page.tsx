@@ -8,6 +8,7 @@ import { Tank } from "@/models/Tank";
 import { FeedInventory } from "@/models/FeedInventory";
 import { CalendarEvent } from "@/models/CalendarEvent";
 import { TankMovement } from "@/models/TankMovement";
+import { AlertNotification } from "@/models/AlertNotification";
 import { User } from "@/models/User";
 import DashboardClient from "./DashboardClient";
 import { getBatchPhase, weeksSince } from "@/lib/utils";
@@ -90,7 +91,7 @@ export default async function DashboardPage() {
   const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-  const [batches, tanks, financials, feedInventory, recentLogs, feedLogs, calendarEvents, recentMovements] = await Promise.all([
+  const [batches, tanks, financials, feedInventory, recentLogs, feedLogs, calendarEvents, recentMovements, activeAlerts] = await Promise.all([
     Batch.find({
       userId,
       status: { $in: ["active", "partial"] },
@@ -109,6 +110,10 @@ export default async function DashboardPage() {
       .sort({ date: -1, createdAt: -1 })
       .limit(12)
       .populate("batchId", "name")
+      .lean<any[]>(),
+    AlertNotification.find({ userId, active: true })
+      .select("title source severity status href nextStepNote followUpDueAt verificationStatus verificationNote assignedToName updatedAt")
+      .sort({ severityRank: -1, updatedAt: -1 })
       .lean<any[]>(),
   ]);
 
@@ -144,7 +149,7 @@ export default async function DashboardPage() {
     title: string;
     detail: string;
     href: string;
-    category: "logging" | "planning" | "health" | "inventory" | "setup" | "harvest";
+    category: "logging" | "planning" | "health" | "inventory" | "setup" | "harvest" | "alerts";
     actionLabel: string;
     whyNow: string;
   }> = [];
@@ -174,6 +179,14 @@ export default async function DashboardPage() {
     .sort((a, b) => b.readinessScore - a.readinessScore || a.batchName.localeCompare(b.batchName));
   const readyBatch = batchReadiness.find((batch) => batch.readinessStatus === "ready") || null;
   const approachingBatch = batchReadiness.find((batch) => batch.readinessStatus === "approaching") || null;
+  const now = Date.now();
+  const overdueFollowUp = activeAlerts
+    .filter((alert: any) => alert.followUpDueAt && new Date(alert.followUpDueAt).getTime() <= now)
+    .sort((a: any, b: any) => new Date(a.followUpDueAt).getTime() - new Date(b.followUpDueAt).getTime())[0] || null;
+  const failedVerification = activeAlerts
+    .filter((alert: any) => alert.verificationStatus === "needs_attention")
+    .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0] || null;
+  const verifiedWaitingFollowUpCount = activeAlerts.filter((alert: any) => alert.verificationStatus === "scheduled").length;
 
   if (batches.length === 0) {
     actions.push({
@@ -269,6 +282,44 @@ export default async function DashboardPage() {
       category: "logging",
       actionLabel: "Record growth check",
       whyNow: "Without growth samples, harvest timing and trend confidence stay weak.",
+    });
+  }
+
+  if (failedVerification) {
+    actions.push({
+      level: failedVerification.severity === "critical" ? "danger" : "warning",
+      title: `Verification failed: ${failedVerification.title}`,
+      detail: failedVerification.verificationNote
+        ? failedVerification.verificationNote
+        : "A previous intervention still needs attention before this issue can be considered under control.",
+      href: failedVerification.href || "/alerts",
+      category: "alerts",
+      actionLabel: "Review follow-up",
+      whyNow: "The system has recorded that the last response did not fully stabilize the issue.",
+    });
+  }
+
+  if (overdueFollowUp) {
+    actions.push({
+      level: overdueFollowUp.severity === "critical" ? "danger" : "warning",
+      title: `Follow-up overdue: ${overdueFollowUp.title}`,
+      detail: overdueFollowUp.nextStepNote
+        ? `Next step waiting: ${overdueFollowUp.nextStepNote}`
+        : "A tracked alert follow-up has passed its due date and should be reviewed now.",
+      href: overdueFollowUp.href || "/alerts",
+      category: "alerts",
+      actionLabel: "Open alert",
+      whyNow: "Unfinished follow-ups weaken the farm's ability to confirm whether corrective actions actually worked.",
+    });
+  } else if (verifiedWaitingFollowUpCount > 0) {
+    actions.push({
+      level: "info",
+      title: "Verification checks scheduled",
+      detail: `${verifiedWaitingFollowUpCount} active alert${verifiedWaitingFollowUpCount > 1 ? "s have" : " has"} a pending verification check.`,
+      href: "/alerts",
+      category: "alerts",
+      actionLabel: "Review alerts",
+      whyNow: "Scheduled verification keeps the farm from closing issues without evidence.",
     });
   }
 
