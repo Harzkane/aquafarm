@@ -29,6 +29,7 @@ type LogEntry = {
 };
 
 type FormState = {
+  date: string;
   batchId: string;
   tankName: string;
   feedSession: "morning" | "evening";
@@ -47,6 +48,7 @@ type FormState = {
 };
 
 const initialForm: FormState = {
+  date: new Date().toISOString().split("T")[0],
   batchId: "",
   tankName: "All Tanks",
   feedSession: "morning",
@@ -187,7 +189,7 @@ export default function FeedingPage() {
       ammonia: values.ammonia === "" ? null : parseFloat(values.ammonia),
       temperature: values.temperature === "" ? null : parseFloat(values.temperature),
       waterChangePct: parseInt(values.waterChangePct) || 0,
-      date: date || new Date().toISOString(),
+      date: date || values.date || new Date().toISOString(),
     };
   }
 
@@ -199,6 +201,7 @@ export default function FeedingPage() {
       feedType: log.feedType,
     });
     return {
+      date: new Date(log.date).toISOString().split("T")[0],
       batchId,
       tankName: log.tankName || "All Tanks",
       feedSession: log.feedSession || "morning",
@@ -237,7 +240,17 @@ export default function FeedingPage() {
       setTimeout(() => setSuccess(false), 3000);
       setShowEntryForm(false);
       setCreateCustomFeed(false);
-      setForm((f) => ({ ...f, feedGiven: "", mortality: "", ph: "", ammonia: "", temperature: "", observations: "", waterChangePct: "" }));
+      setForm((f) => ({
+        ...f,
+        date: new Date().toISOString().split("T")[0],
+        feedGiven: "",
+        mortality: "",
+        ph: "",
+        ammonia: "",
+        temperature: "",
+        observations: "",
+        waterChangePct: "",
+      }));
     } catch (err: any) {
       setEntryError(err?.message || "Failed to save log entry");
     } finally {
@@ -383,6 +396,14 @@ export default function FeedingPage() {
     [logs],
   );
   const activeBatchCount = batches.length;
+  const todayDateInput = new Date().toISOString().split("T")[0];
+  const yesterdayDateInput = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const twoDaysAgoDateInput = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const missingRecentDays = useMemo(() => {
+    const days = [yesterdayDateInput, twoDaysAgoDateInput];
+    return days.filter((day) => !logs.some((log) => new Date(log.date).toISOString().split("T")[0] === day)).length;
+  }, [logs, twoDaysAgoDateInput, yesterdayDateInput]);
+  const isBackdatedEntry = form.date && form.date < todayDateInput;
 
   if (loading) {
     return (
@@ -400,7 +421,7 @@ export default function FeedingPage() {
           <p className="text-pond-200/75 text-sm mt-1">Record feeding, water quality, and mortality in one daily routine.</p>
         </div>
         <button onClick={() => { setEntryError(""); setShowEntryForm(true); }} className="btn-primary">
-          <Plus className="w-4 h-4" /> Add Today&apos;s Entry
+          <Plus className="w-4 h-4" /> Add Log Entry
         </button>
       </div>
 
@@ -443,6 +464,15 @@ export default function FeedingPage() {
       {error && (
         <div className="rounded-xl px-4 py-3 text-sm text-danger border border-red-400/30 bg-red-500/10">{error}</div>
       )}
+
+      {missingRecentDays > 0 ? (
+        <div className="rounded-xl border border-water-300/20 bg-[rgba(6,75,113,0.18)] px-4 py-3 text-sm text-pond-100">
+          <p className="font-medium">Backfill reminder</p>
+          <p className="mt-1 text-pond-200/75">
+            {missingRecentDays} recent day{missingRecentDays > 1 ? "s look" : " looks"} missing from the log. You can add backdated entries when farmers remember later.
+          </p>
+        </div>
+      ) : null}
 
       <div className="space-y-3">
           <div className="glass-card p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -586,7 +616,7 @@ export default function FeedingPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(12, 12, 14,0.85)", backdropFilter: "blur(8px)" }}>
           <div className="glass-card w-full max-w-2xl max-h-[85vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="font-display text-lg text-pond-100">Today&apos;s Entry</h2>
+              <h2 className="font-display text-lg text-pond-100">Log Entry</h2>
               <button onClick={() => { setShowEntryForm(false); setEntryError(""); }} className="text-pond-200/75 hover:text-pond-300">
                 <X className="w-5 h-5" />
               </button>
@@ -597,6 +627,36 @@ export default function FeedingPage() {
               </div>
             )}
             <form onSubmit={submit} className="space-y-4">
+              <div className="rounded-xl p-4 space-y-3" style={{ background: "rgba(12, 12, 14,0.5)", border: "1px solid rgba(148, 163, 184,0.12)" }}>
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr,auto] gap-3 items-end">
+                  <div>
+                    <label className="block text-xs text-pond-300 mb-1.5 font-medium">Log Date *</label>
+                    <input
+                      className="field"
+                      type="date"
+                      required
+                      max={todayDateInput}
+                      value={form.date}
+                      onChange={(e) => update("date", e.target.value)}
+                    />
+                    <p className="text-[11px] text-pond-200/60 mt-1">Use today by default, or backfill a missed day when the team remembers later.</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button type="button" className="btn-secondary !px-3 !py-1.5 text-xs" onClick={() => update("date", todayDateInput)}>Today</button>
+                    <button type="button" className="btn-secondary !px-3 !py-1.5 text-xs" onClick={() => update("date", yesterdayDateInput)}>Yesterday</button>
+                    <button type="button" className="btn-secondary !px-3 !py-1.5 text-xs" onClick={() => update("date", twoDaysAgoDateInput)}>2 days ago</button>
+                  </div>
+                </div>
+                {isBackdatedEntry ? (
+                  <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                    You are adding a backdated entry for{" "}
+                    <span className="font-medium">
+                      {new Date(`${form.date}T00:00:00`).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}
+                    </span>.
+                  </div>
+                ) : null}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-pond-300 mb-1.5 font-medium">Batch *</label>
@@ -728,7 +788,7 @@ export default function FeedingPage() {
                 <button type="button" onClick={() => setShowEntryForm(false)} className="btn-secondary flex-1">Cancel</button>
                 <button type="submit" disabled={saving} className="btn-primary flex-1">
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : success ? <CheckCircle className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                  {saving ? "Saving…" : success ? "Saved!" : "Save Entry"}
+                  {saving ? "Saving…" : success ? "Saved!" : isBackdatedEntry ? "Save Backdated Entry" : "Save Entry"}
                 </button>
               </div>
             </form>
